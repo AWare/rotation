@@ -1,24 +1,20 @@
 # Rotation Control
 
-An Android app for controlling screen orientation using functional programming style with Kotlin and Arrow.
+A minimal Android app for controlling screen orientation using functional programming with Kotlin and Arrow. Focused on simplicity, testability, and type-safe error handling.
 
 ## Features
 
-- **Quick Settings Tile**: Control screen orientation directly from the Quick Settings panel
-- **In-App Control**: Full-featured app interface for managing orientation settings
-- **Per-App Settings**: Set different orientations for individual apps with automatic switching
-- **Multi-Screen Support**: Target specific displays on multi-screen devices
-- **Persistent Storage**: Settings are saved and automatically restored
-- **Functional Programming**: Built using FP principles with Arrow library for type-safe error handling
+- **Quick Settings Tile**: Tap to cycle through orientations
+- **Minimal UI**: Simple list interface with tap-to-change controls
+- **Per-App Settings**: Automatic orientation switching per app
+- **Multi-Screen Support**: Target specific displays
+- **Comprehensive Tests**: Extensive unit test coverage for all FP logic
+- **Type-Safe**: Arrow Either for error handling without exceptions
+- **Persistent Storage**: Room database + DataStore
 
 ## Supported Orientations
 
-- Auto Rotate (Unspecified)
-- Portrait
-- Landscape
-- Reverse Portrait
-- Reverse Landscape
-- Sensor (all orientations)
+Auto Rotate • Portrait • Landscape • Reverse Portrait • Reverse Landscape • Sensor
 
 ## Architecture
 
@@ -26,62 +22,71 @@ The app is built using modern Android development practices and functional progr
 
 ### Tech Stack
 
-- **Language**: Kotlin 1.9.21
-- **UI**: Jetpack Compose with Material 3
-- **FP Library**: Arrow 1.2.1 for functional programming (Either, Option, etc.)
-- **Database**: Room 2.6.1 for persistent storage
-- **Preferences**: DataStore for app preferences
-- **Architecture**: MVVM with StateFlow for reactive state management
+- **Kotlin 1.9.21** with functional programming patterns
+- **Arrow 1.2.1** for FP types (Either, Option)
+- **Jetpack Compose** with Material 3
+- **Room 2.6.1** for database
+- **DataStore** for preferences
+- **MVVM** with reactive StateFlow
 
 ### Project Structure
 
 ```
-app/src/main/java/com/aware/rotation/
-├── domain/
-│   └── model/              # Domain models using FP style
-│       ├── ScreenOrientation.kt
-│       ├── TargetScreen.kt
-│       ├── AppOrientationSetting.kt
-│       └── OrientationState.kt
-├── data/
-│   ├── local/
-│   │   ├── entity/         # Room entities
-│   │   ├── dao/            # Data access objects
-│   │   └── RotationDatabase.kt
-│   ├── repository/         # Repository pattern with Either for error handling
-│   └── preferences/        # DataStore preferences
-├── service/
-│   ├── OrientationControlService.kt      # Handles orientation changes
-│   └── ForegroundAppDetectorService.kt   # Accessibility service
-├── tile/
-│   └── OrientationTileService.kt         # Quick Settings tile
-├── ui/
-│   ├── MainActivity.kt
-│   ├── MainViewModel.kt
-│   ├── screen/             # Compose screens
-│   ├── components/         # Reusable Compose components
-│   └── theme/              # Material 3 theme
-└── util/                   # Utility functions and helpers
+app/src/
+├── main/java/com/aware/rotation/
+│   ├── domain/model/           # FP domain models (immutable)
+│   ├── data/
+│   │   ├── local/              # Room database
+│   │   ├── repository/         # Either-based repository
+│   │   └── preferences/        # DataStore
+│   ├── service/                # Android services
+│   ├── tile/                   # Quick Settings tile
+│   ├── ui/                     # Minimal Compose UI
+│   └── util/                   # FP utilities
+└── test/java/                  # Comprehensive unit tests
 ```
 
 ## Functional Programming Patterns
 
-This app demonstrates FP concepts:
-
-- **Immutable Data Structures**: All domain models are immutable data classes
-- **Pure Functions**: State transformations through copy functions (e.g., `withOrientation()`)
-- **Either Type**: Type-safe error handling without exceptions
-- **Flow**: Reactive data streams for state management
-- **Composition**: Small, composable functions instead of large classes
-
-### Example: Error Handling with Arrow
-
 ```kotlin
+// Type-safe error handling with Either
 fun setOrientation(orientation: ScreenOrientation): Either<OrientationError, Unit> = either {
     PermissionChecker.checkWriteSettingsPermission(context).bind()
     applyOrientation(orientation).bind()
 }
+
+// Immutable state transformations
+fun withOrientation(newOrientation: ScreenOrientation): AppOrientationSetting =
+    copy(orientation = newOrientation)
+
+// Pure functions and composition
+val effectiveOrientation = state.getEffectiveOrientation(packageName)
 ```
+
+## Testing
+
+Comprehensive test coverage with focus on:
+- Domain model immutability and transformations
+- Either-based error handling
+- Repository operations
+- State management with Flow
+- ViewModel reactive behavior
+
+### Run Tests
+
+```bash
+./gradlew test                  # All unit tests
+./gradlew testDebugUnitTest    # Debug tests only
+```
+
+### Test Libraries
+
+- JUnit 4
+- MockK for mocking
+- Turbine for Flow testing
+- Coroutines Test
+- Kotest assertions
+- Truth assertions
 
 ## Setup & Permissions
 
@@ -97,10 +102,15 @@ fun setOrientation(orientation: ScreenOrientation): Either<OrientationError, Uni
 
 ### Installation
 
-1. Clone the repository
-2. Open in Android Studio
-3. Build and run on a device (API 29+)
-4. Grant required permissions when prompted
+```bash
+# Build debug APK
+./gradlew assembleDebug
+
+# Install on connected device
+./gradlew installDebug
+```
+
+Or download from [GitHub Releases](../../releases)
 
 ## Usage
 
@@ -112,26 +122,62 @@ fun setOrientation(orientation: ScreenOrientation): Either<OrientationError, Uni
 
 ### In-App Control
 
-1. **Global Orientation**: Set a default orientation for all apps
-2. **Per-App Settings**:
-   - Enable the Accessibility Service
-   - Search for an app
-   - Select desired orientation
-   - Settings are automatically applied when the app is opened
+- **Global**: Tap to cycle through orientations
+- **Per-App**: Enable Accessibility, then tap any app to set orientation
+- **Search**: Filter apps by name
 
-## Multi-Screen Support
+## CI/CD
 
-The app supports targeting specific displays on devices with multiple screens:
+### GitHub Actions
 
-- **All Screens**: Apply orientation to all displays
-- **Primary Screen**: Target the main display
-- **Secondary Screen**: Target external displays
+**Build & Test** (on push/PR):
+- Runs all unit tests
+- Builds debug APK
+- Runs lint checks
+- Uploads artifacts
 
-Note: Per-display orientation control requires system-level access and may be limited on some devices.
+**Release** (on tag push):
+- Runs full test suite
+- Builds release APK
+- Creates GitHub release
+- Uploads signed APK (if keystore configured)
+
+### Creating a Release
+
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+GitHub Actions will automatically build and create a release.
+
+### Signing (Optional)
+
+Add these secrets to your GitHub repository:
+- `KEYSTORE_BASE64`: Base64-encoded keystore file
+- `KEY_ALIAS`: Keystore alias
+- `KEY_PASSWORD`: Key password
+- `KEYSTORE_PASSWORD`: Keystore password
+
+## Development
+
+### Code Style
+
+- Immutable data structures (data classes with val)
+- Pure functions for transformations
+- Either for error handling (no exceptions)
+- Flow for reactive streams
+- Small, composable functions
+
+### Adding Features
+
+1. Define immutable domain models
+2. Create repository methods with Either return types
+3. Add comprehensive unit tests
+4. Update ViewModel with StateFlow
+5. Minimal UI updates
 
 ## Database Schema
-
-### AppOrientationEntity
 
 ```kotlin
 @Entity(tableName = "app_orientations")
@@ -152,9 +198,10 @@ data class AppOrientationEntity(
 ./gradlew assembleDebug      # Debug build
 ./gradlew assembleRelease    # Release build
 ./gradlew test              # Run tests
+./gradlew lint              # Run lint
 ```
 
-## Minimum Requirements
+## Requirements
 
 - Android 10 (API 29) or higher
 - Device with orientation sensors
@@ -165,8 +212,9 @@ Copyright (c) 2026 AWare
 
 ## Contributing
 
-Contributions are welcome! Please ensure code follows:
-- Kotlin coding conventions
+Contributions welcome! Please ensure:
 - Functional programming principles
-- Compose best practices
 - Immutable state management
+- Comprehensive unit tests
+- Either-based error handling
+- Minimal UI design

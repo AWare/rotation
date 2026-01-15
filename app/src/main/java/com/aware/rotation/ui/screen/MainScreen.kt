@@ -1,21 +1,22 @@
 package com.aware.rotation.ui.screen
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.aware.rotation.domain.model.ScreenOrientation
 import com.aware.rotation.ui.MainViewModel
-import com.aware.rotation.ui.components.*
 
 /**
- * Main screen composable using FP style state management
+ * Minimal main screen focusing on essential functionality
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -27,118 +28,105 @@ fun MainScreen(viewModel: MainViewModel) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Rotation Control") },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                )
+                title = { Text("Rotation") }
             )
         }
     ) { paddingValues ->
-        LazyColumn(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+                .padding(paddingValues)
         ) {
-            // Permission warnings
-            if (!state.hasWriteSettingsPermission) {
-                item {
-                    PermissionWarningCard(
-                        title = "Settings Permission Required",
-                        description = "Grant permission to modify system settings to control screen orientation.",
-                        onGrantClick = { viewModel.requestWriteSettingsPermission() }
+            // Permission warnings - compact
+            if (!state.hasWriteSettingsPermission || !state.isAccessibilityServiceEnabled) {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = MaterialTheme.colorScheme.errorContainer,
+                    onClick = {
+                        if (!state.hasWriteSettingsPermission) viewModel.requestWriteSettingsPermission()
+                        else viewModel.requestAccessibilityPermission()
+                    }
+                ) {
+                    Text(
+                        text = if (!state.hasWriteSettingsPermission) "Tap to grant Settings permission"
+                        else "Tap to enable Accessibility",
+                        modifier = Modifier.padding(12.dp),
+                        style = MaterialTheme.typography.bodySmall
                     )
                 }
             }
 
-            if (!state.isAccessibilityServiceEnabled) {
-                item {
-                    PermissionWarningCard(
-                        title = "Accessibility Service Required",
-                        description = "Enable the accessibility service to detect foreground apps and apply per-app rotation settings.",
-                        onGrantClick = { viewModel.requestAccessibilityPermission() }
+            // Global orientation - compact
+            ListItem(
+                headlineContent = { Text("Global") },
+                trailingContent = {
+                    Text(
+                        text = state.globalOrientation.displayName,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary
                     )
+                },
+                modifier = Modifier.clickable {
+                    viewModel.setGlobalOrientation(state.globalOrientation.next())
                 }
-            }
+            )
 
-            // Global orientation control
-            item {
-                GlobalOrientationCard(
-                    currentOrientation = state.globalOrientation,
-                    onOrientationSelected = { viewModel.setGlobalOrientation(it) },
-                    enabled = state.hasWriteSettingsPermission
-                )
-            }
+            Divider()
 
-            // Per-app settings section
-            item {
-                Text(
-                    text = "Per-App Settings",
-                    style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.padding(vertical = 8.dp)
-                )
-            }
-
-            // Search bar
-            item {
-                SearchBar(
-                    query = searchQuery,
-                    onQueryChange = { viewModel.updateSearchQuery(it) }
-                )
-            }
-
-            // App list
+            // Search - minimal
             if (state.isAccessibilityServiceEnabled) {
-                items(
-                    items = filteredApps,
-                    key = { it.packageName }
-                ) { app ->
-                    val currentSetting = state.perAppSettings[app.packageName]
-                    AppOrientationCard(
-                        app = app,
-                        currentSetting = currentSetting,
-                        onOrientationSelected = { orientation ->
-                            viewModel.setAppOrientation(
-                                app.packageName,
-                                app.appName,
-                                orientation
-                            )
-                        },
-                        onRemoveSetting = {
-                            viewModel.removeAppSetting(app.packageName)
-                        }
-                    )
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { viewModel.updateSearchQuery(it) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    placeholder = { Text("Search") },
+                    singleLine = true
+                )
+
+                // App list - minimal
+                LazyColumn {
+                    items(
+                        items = filteredApps,
+                        key = { it.packageName }
+                    ) { app ->
+                        val currentSetting = state.perAppSettings[app.packageName]
+                        ListItem(
+                            headlineContent = {
+                                Text(
+                                    text = app.appName,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            },
+                            trailingContent = {
+                                Text(
+                                    text = currentSetting?.orientation?.displayName ?: "Default",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = if (currentSetting != null) MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            },
+                            modifier = Modifier.clickable {
+                                val current = currentSetting?.orientation ?: ScreenOrientation.Unspecified
+                                viewModel.setAppOrientation(app.packageName, app.appName, current.next())
+                            }
+                        )
+                    }
                 }
             } else {
-                item {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant
-                        )
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Info,
-                                contentDescription = null,
-                                modifier = Modifier.size(48.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = "Enable accessibility service to configure per-app settings",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(32.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "Enable Accessibility to set per-app rotations",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
         }
