@@ -1,0 +1,26 @@
+package com.aware.rotation.util
+
+import android.content.Context
+import android.provider.Settings
+import arrow.core.Either
+import arrow.core.left
+import arrow.core.right
+import com.aware.rotation.domain.model.OrientationError
+
+/**
+ * Utility for checking permissions using FP style
+ */
+object PermissionChecker {
+    fun hasWriteSettingsPermission(context: Context): Either<OrientationError, Boolean> =
+        Either.catch {
+            Settings.System.canWrite(context)
+        }.mapLeft {
+            OrientationError.PermissionDenied("WRITE_SETTINGS")
+        }
+
+    fun checkWriteSettingsPermission(context: Context): Either<OrientationError, Unit> =
+        hasWriteSettingsPermission(context).flatMap { hasPermission ->
+            if (hasPermission) Unit.right()
+            else OrientationError.PermissionDenied("WRITE_SETTINGS").left()
+        }
+}

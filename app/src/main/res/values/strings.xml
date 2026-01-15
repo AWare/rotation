@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Rotation Control</string>
+    <string name="tile_label">Screen Rotation</string>
+    <string name="tile_inactive">Auto Rotate</string>
+    <string name="tile_portrait">Portrait</string>
+    <string name="tile_landscape">Landscape</string>
+    <string name="tile_reverse_portrait">Reverse Portrait</string>
+    <string name="tile_reverse_landscape">Reverse Landscape</string>
+
+    <!-- Main Screen -->
+    <string name="main_title">Rotation Control</string>
+    <string name="global_orientation">Global Orientation</string>
+    <string name="per_app_settings">Per-App Settings</string>
+    <string name="installed_apps">Installed Apps</string>
+    <string name="accessibility_required">Accessibility Service Required</string>
+    <string name="accessibility_description">Enable the accessibility service to detect foreground apps and apply per-app rotation settings.</string>
+    <string name="enable_service">Enable Service</string>
+    <string name="settings_permission_required">Settings Permission Required</string>
+    <string name="settings_permission_description">This app needs permission to modify system settings to control screen orientation.</string>
+    <string name="grant_permission">Grant Permission</string>
+
+    <!-- Orientations -->
+    <string name="orientation_auto">Auto Rotate</string>
+    <string name="orientation_portrait">Portrait</string>
+    <string name="orientation_landscape">Landscape</string>
+    <string name="orientation_reverse_portrait">Reverse Portrait</string>
+    <string name="orientation_reverse_landscape">Reverse Landscape</string>
+    <string name="orientation_sensor">Sensor</string>
+    <string name="orientation_unspecified">Unspecified</string>
+
+    <!-- Screen Selection -->
+    <string name="target_screen">Target Screen</string>
+    <string name="all_screens">All Screens</string>
+    <string name="primary_screen">Primary Screen</string>
+    <string name="secondary_screen">Secondary Screen</string>
+
+    <!-- App List -->
+    <string name="search_apps">Search apps…</string>
+    <string name="no_apps_found">No apps found</string>
+    <string name="loading_apps">Loading apps…</string>
+    <string name="app_orientation_set">Orientation set for %s</string>
+    <string name="clear_setting">Clear setting</string>
+
+    <!-- Accessibility Service -->
+    <string name="accessibility_service_description">Rotation Control uses this service to detect which app is in the foreground and apply per-app rotation settings. No data is collected or transmitted.</string>
+</resources>
