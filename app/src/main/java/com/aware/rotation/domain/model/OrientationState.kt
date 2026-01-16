@@ -8,7 +8,7 @@ data class OrientationState(
     val currentApp: String? = null,
     val perAppSettings: Map<String, AppOrientationSetting> = emptyMap(),
     val isAccessibilityServiceEnabled: Boolean = false,
-    val hasWriteSettingsPermission: Boolean = false
+    val hasDrawOverlayPermission: Boolean = false
 ) {
     fun withGlobalOrientation(orientation: ScreenOrientation): OrientationState =
         copy(globalOrientation = orientation)
@@ -25,8 +25,8 @@ data class OrientationState(
     fun withAccessibilityServiceEnabled(enabled: Boolean): OrientationState =
         copy(isAccessibilityServiceEnabled = enabled)
 
-    fun withWriteSettingsPermission(granted: Boolean): OrientationState =
-        copy(hasWriteSettingsPermission = granted)
+    fun withDrawOverlayPermission(granted: Boolean): OrientationState =
+        copy(hasDrawOverlayPermission = granted)
 
     /**
      * Gets the effective orientation for the current or specified app
@@ -39,5 +39,5 @@ data class OrientationState(
             ?: globalOrientation
 
     fun isFullyConfigured(): Boolean =
-        isAccessibilityServiceEnabled && hasWriteSettingsPermission
+        isAccessibilityServiceEnabled && hasDrawOverlayPermission
 }

@@ -83,7 +83,7 @@ class MainViewModelTest {
         assertNull(state.currentApp)
         assertTrue(state.perAppSettings.isEmpty())
         assertFalse(state.isAccessibilityServiceEnabled)
-        assertFalse(state.hasWriteSettingsPermission)
+        assertFalse(state.hasDrawOverlayPermission)
     }
 
     @Test
@@ -150,7 +150,7 @@ class MainViewModelTest {
 
         val state = viewModel.state.value
         // Permissions will be false in test environment
-        assertFalse(state.hasWriteSettingsPermission)
+        assertFalse(state.hasDrawOverlayPermission)
         assertFalse(state.isAccessibilityServiceEnabled)
     }
 }

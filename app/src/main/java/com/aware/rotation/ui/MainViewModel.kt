@@ -92,13 +92,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun checkPermissions() {
         viewModelScope.launch {
-            val hasWriteSettings = PermissionChecker.hasWriteSettingsPermission(context)
+            val hasDrawOverlay = PermissionChecker.hasDrawOverlayPermission(context)
                 .fold({ false }, { it })
             val hasAccessibility = AccessibilityChecker.isAccessibilityServiceEnabled(context)
                 .fold({ false }, { it })
 
             _state.update {
-                it.withWriteSettingsPermission(hasWriteSettings)
+                it.withDrawOverlayPermission(hasDrawOverlay)
                     .withAccessibilityServiceEnabled(hasAccessibility)
             }
         }
@@ -143,8 +143,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _searchQuery.value = query
     }
 
-    fun requestWriteSettingsPermission() {
-        val intent = Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS).apply {
+    fun requestDrawOverlayPermission() {
+        val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION).apply {
             data = Uri.parse("package:${context.packageName}")
             flags = Intent.FLAG_ACTIVITY_NEW_TASK
         }

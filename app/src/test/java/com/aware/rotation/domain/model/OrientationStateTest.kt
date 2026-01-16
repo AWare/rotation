@@ -13,7 +13,7 @@ class OrientationStateTest {
         assertNull(state.currentApp)
         assertTrue(state.perAppSettings.isEmpty())
         assertFalse(state.isAccessibilityServiceEnabled)
-        assertFalse(state.hasWriteSettingsPermission)
+        assertFalse(state.hasDrawOverlayPermission)
     }
 
     @Test
@@ -70,9 +70,9 @@ class OrientationStateTest {
     }
 
     @Test
-    fun `withWriteSettingsPermission updates permission status`() {
-        val state = OrientationState().withWriteSettingsPermission(true)
-        assertTrue(state.hasWriteSettingsPermission)
+    fun `withDrawOverlayPermission updates permission status`() {
+        val state = OrientationState().withDrawOverlayPermission(true)
+        assertTrue(state.hasDrawOverlayPermission)
     }
 
     @Test
@@ -117,20 +117,20 @@ class OrientationStateTest {
     fun `isFullyConfigured returns true when all permissions granted`() {
         val state = OrientationState(
             isAccessibilityServiceEnabled = true,
-            hasWriteSettingsPermission = true
+            hasDrawOverlayPermission = true
         )
         assertTrue(state.isFullyConfigured())
     }
 
     @Test
     fun `isFullyConfigured returns false when permissions missing`() {
-        val state1 = OrientationState(isAccessibilityServiceEnabled = true, hasWriteSettingsPermission = false)
+        val state1 = OrientationState(isAccessibilityServiceEnabled = true, hasDrawOverlayPermission = false)
         assertFalse(state1.isFullyConfigured())
 
-        val state2 = OrientationState(isAccessibilityServiceEnabled = false, hasWriteSettingsPermission = true)
+        val state2 = OrientationState(isAccessibilityServiceEnabled = false, hasDrawOverlayPermission = true)
         assertFalse(state2.isFullyConfigured())
 
-        val state3 = OrientationState(isAccessibilityServiceEnabled = false, hasWriteSettingsPermission = false)
+        val state3 = OrientationState(isAccessibilityServiceEnabled = false, hasDrawOverlayPermission = false)
         assertFalse(state3.isFullyConfigured())
     }
 

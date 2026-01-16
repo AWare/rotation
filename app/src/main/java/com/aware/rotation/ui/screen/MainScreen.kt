@@ -36,17 +36,17 @@ fun MainScreen(viewModel: MainViewModel) {
                 .padding(paddingValues)
         ) {
             // Permission warnings - compact
-            if (!state.hasWriteSettingsPermission || !state.isAccessibilityServiceEnabled) {
+            if (!state.hasDrawOverlayPermission || !state.isAccessibilityServiceEnabled) {
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
                     color = MaterialTheme.colorScheme.errorContainer,
                     onClick = {
-                        if (!state.hasWriteSettingsPermission) viewModel.requestWriteSettingsPermission()
+                        if (!state.hasDrawOverlayPermission) viewModel.requestDrawOverlayPermission()
                         else viewModel.requestAccessibilityPermission()
                     }
                 ) {
                     Text(
-                        text = if (!state.hasWriteSettingsPermission) "Tap to grant Settings permission"
+                        text = if (!state.hasDrawOverlayPermission) "Tap to grant Draw Over Apps permission"
                         else "Tap to enable Accessibility",
                         modifier = Modifier.padding(12.dp),
                         style = MaterialTheme.typography.bodySmall
