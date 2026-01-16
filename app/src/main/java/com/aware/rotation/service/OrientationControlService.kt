@@ -102,9 +102,7 @@ class OrientationControlService : Service() {
     ): Either<OrientationError, Unit> {
         // Note: Per-display orientation requires system-level access
         // For now, we apply the same logic as all displays
-        return setOrientationForAllDisplays(orientation).mapLeft { e ->
-            OrientationError.DatabaseError("Failed to set orientation for display $displayId: ${e.message}")
-        }
+        return setOrientationForAllDisplays(orientation)
     }
 
     fun getAvailableDisplays(): Either<OrientationError, List<Display>> =
