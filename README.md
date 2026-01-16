@@ -205,6 +205,74 @@ data class AppOrientationEntity(
 
 - Android 10 (API 29) or higher
 - Device with orientation sensors
+- **WRITE_SETTINGS permission** (must be granted manually)
+
+## Troubleshooting
+
+### Orientation Not Changing
+
+If the app builds successfully but doesn't change the screen orientation:
+
+1. **Check Permission**
+   - Open the app and verify permission warnings are not showing
+   - Go to Settings → Apps → Rotation → Special app access → Modify system settings
+   - Make sure "Allow modifying system settings" is **enabled**
+
+2. **Check Logs**
+   - Connect device via ADB: `adb logcat | grep OrientationControl`
+   - Look for:
+     - `WRITE_SETTINGS permission not granted!` → Permission issue
+     - `Successfully updated system settings` → Settings updated (but might not work on all devices)
+     - Toast notifications showing errors
+
+3. **Test with Quick Settings Tile**
+   - Add the "Rotation" tile to Quick Settings
+   - Tap it and watch for Toast messages
+   - Check logcat for detailed logging
+
+4. **Known Limitations**
+   - Some Android ROMs/manufacturers block orientation control from regular apps
+   - On some devices, `Settings.System.USER_ROTATION` only works when auto-rotate is disabled
+   - System apps or root access may be required on some devices
+   - Per-app orientation requires Accessibility Service permission
+
+5. **Test Manually**
+   - Try disabling auto-rotate in system settings first
+   - Then use the app to set a specific orientation
+   - Check if `adb shell settings get system user_rotation` changes
+
+### Debugging Steps
+
+```bash
+# Check if permission is granted
+adb shell dumpsys package com.aware.rotation | grep WRITE_SETTINGS
+
+# Watch logs while using the app
+adb logcat -s OrientationControl:D
+
+# Check current rotation settings
+adb shell settings get system accelerometer_rotation
+adb shell settings get system user_rotation
+
+# Manually test setting rotation (as comparison)
+adb shell settings put system accelerometer_rotation 0
+adb shell settings put system user_rotation 1  # landscape
+```
+
+### Expected Log Output
+
+When working correctly, you should see:
+```
+D/OrientationControl: handleIntent: action=com.aware.rotation.action.SET_ORIENTATION
+D/OrientationControl: SET_ORIENTATION: orientationValue=1, screenId=-1
+D/OrientationControl: Setting orientation to: Portrait
+D/OrientationControl: setOrientationForAllDisplays: Portrait
+D/OrientationControl: Setting ACCELEROMETER_ROTATION to 0
+D/OrientationControl: ACCELEROMETER_ROTATION putInt result: true
+D/OrientationControl: Setting USER_ROTATION to 0 (Portrait)
+D/OrientationControl: USER_ROTATION putInt result: true
+I/OrientationControl: Successfully set orientation to: Portrait
+```
 
 ## License
 
