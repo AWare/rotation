@@ -19,8 +19,11 @@ object PermissionChecker {
         }
 
     fun checkWriteSettingsPermission(context: Context): Either<OrientationError, Unit> =
-        hasWriteSettingsPermission(context).flatMap { hasPermission ->
-            if (hasPermission) Unit.right()
-            else OrientationError.PermissionDenied("WRITE_SETTINGS").left()
-        }
+        hasWriteSettingsPermission(context).fold(
+            { error -> error.left() },
+            { hasPermission ->
+                if (hasPermission) Unit.right()
+                else OrientationError.PermissionDenied("WRITE_SETTINGS").left()
+            }
+        )
 }

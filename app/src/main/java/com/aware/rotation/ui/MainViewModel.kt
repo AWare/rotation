@@ -93,9 +93,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun checkPermissions() {
         viewModelScope.launch {
             val hasWriteSettings = PermissionChecker.hasWriteSettingsPermission(context)
-                .getOrElse { false }
+                .fold({ false }, { it })
             val hasAccessibility = AccessibilityChecker.isAccessibilityServiceEnabled(context)
-                .getOrElse { false }
+                .fold({ false }, { it })
 
             _state.update {
                 it.withWriteSettingsPermission(hasWriteSettings)

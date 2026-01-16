@@ -23,10 +23,10 @@ data class AppOrientationEntity(
  */
 fun AppOrientationEntity.toDomain(): AppOrientationSetting {
     val orientation = ScreenOrientation.fromValue(orientationValue)
-        .getOrElse { ScreenOrientation.Unspecified }
+        .fold({ ScreenOrientation.Unspecified }, { it })
 
     val targetScreen = TargetScreen.fromId(targetScreenId, targetScreenName)
-        .getOrElse { TargetScreen.AllScreens }
+        .fold({ TargetScreen.AllScreens }, { it })
 
     return AppOrientationSetting(
         packageName = packageName,

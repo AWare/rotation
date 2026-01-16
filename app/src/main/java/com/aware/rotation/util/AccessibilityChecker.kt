@@ -29,8 +29,11 @@ object AccessibilityChecker {
         context: Context,
         serviceName: String = "com.aware.rotation/.service.ForegroundAppDetectorService"
     ): Either<OrientationError, Unit> =
-        isAccessibilityServiceEnabled(context, serviceName).flatMap { isEnabled ->
-            if (isEnabled) Unit.right()
-            else OrientationError.ServiceNotRunning(serviceName).left()
-        }
+        isAccessibilityServiceEnabled(context, serviceName).fold(
+            { error -> error.left() },
+            { isEnabled ->
+                if (isEnabled) Unit.right()
+                else OrientationError.ServiceNotRunning(serviceName).left()
+            }
+        )
 }

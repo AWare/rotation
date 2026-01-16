@@ -31,7 +31,7 @@ class PreferencesManager(private val context: Context) {
             .map { preferences ->
                 val value = preferences[PreferencesKeys.GLOBAL_ORIENTATION]
                     ?: ScreenOrientation.Unspecified.value
-                ScreenOrientation.fromValue(value).getOrElse { ScreenOrientation.Unspecified }
+                ScreenOrientation.fromValue(value).fold({ ScreenOrientation.Unspecified }, { it })
             }
 
     val lastTileOrientation: Flow<ScreenOrientation> =
@@ -40,7 +40,7 @@ class PreferencesManager(private val context: Context) {
             .map { preferences ->
                 val value = preferences[PreferencesKeys.LAST_TILE_ORIENTATION]
                     ?: ScreenOrientation.Unspecified.value
-                ScreenOrientation.fromValue(value).getOrElse { ScreenOrientation.Unspecified }
+                ScreenOrientation.fromValue(value).fold({ ScreenOrientation.Unspecified }, { it })
             }
 
     suspend fun setGlobalOrientation(orientation: ScreenOrientation): Either<OrientationError, Unit> =
@@ -48,6 +48,7 @@ class PreferencesManager(private val context: Context) {
             context.dataStore.edit { preferences ->
                 preferences[PreferencesKeys.GLOBAL_ORIENTATION] = orientation.value
             }
+            Unit
         }.mapLeft { e ->
             OrientationError.DatabaseError("Failed to save global orientation: ${e.message}")
         }
@@ -57,6 +58,7 @@ class PreferencesManager(private val context: Context) {
             context.dataStore.edit { preferences ->
                 preferences[PreferencesKeys.LAST_TILE_ORIENTATION] = orientation.value
             }
+            Unit
         }.mapLeft { e ->
             OrientationError.DatabaseError("Failed to save tile orientation: ${e.message}")
         }
@@ -64,6 +66,7 @@ class PreferencesManager(private val context: Context) {
     suspend fun clear(): Either<OrientationError, Unit> =
         Either.catch {
             context.dataStore.edit { it.clear() }
+            Unit
         }.mapLeft { e ->
             OrientationError.DatabaseError("Failed to clear preferences: ${e.message}")
         }

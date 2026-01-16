@@ -69,7 +69,7 @@ fun MainScreen(viewModel: MainViewModel) {
                 }
             )
 
-            HorizontalDivider()
+            Divider()
 
             // Search - minimal
             if (state.isAccessibilityServiceEnabled) {

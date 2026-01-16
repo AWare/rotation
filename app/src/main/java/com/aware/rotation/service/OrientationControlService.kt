@@ -99,15 +99,13 @@ class OrientationControlService : Service() {
     private fun setOrientationForDisplay(
         orientation: ScreenOrientation,
         displayId: Int
-    ): Either<OrientationError, Unit> =
-        Either.catch {
-            val display = displayManager.getDisplay(displayId)
-            // Note: Per-display orientation requires system-level access
-            // For now, we apply the same logic as all displays
-            setOrientationForAllDisplays(orientation).getOrNull()
-        }.mapLeft { e ->
+    ): Either<OrientationError, Unit> {
+        // Note: Per-display orientation requires system-level access
+        // For now, we apply the same logic as all displays
+        return setOrientationForAllDisplays(orientation).mapLeft { e ->
             OrientationError.DatabaseError("Failed to set orientation for display $displayId: ${e.message}")
         }
+    }
 
     fun getAvailableDisplays(): Either<OrientationError, List<Display>> =
         Either.catch {
