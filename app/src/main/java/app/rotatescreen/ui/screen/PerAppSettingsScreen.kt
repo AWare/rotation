@@ -2,8 +2,8 @@ package app.rotatescreen.ui.screen
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -97,10 +97,14 @@ fun PerAppSettingsScreen(
             // App picker and configuration
             RiscOsWindow(
                 title = "Select App",
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier
+                    .fillMaxSize()
+                    .imePadding()
             ) {
                 Column(
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     // Search field
@@ -218,17 +222,12 @@ fun PerAppSettingsScreen(
                     // App list
                     RiscOsPanel(
                         inset = true,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f)
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        LazyColumn(
+                        Column(
                             verticalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
-                            items(
-                                items = filteredApps,
-                                key = { it.packageName }
-                            ) { app ->
+                            filteredApps.forEach { app ->
                                 val currentSetting = state.perAppSettings[app.packageName]
                                 val isSelected = selectedAppForConfig == app.packageName
 

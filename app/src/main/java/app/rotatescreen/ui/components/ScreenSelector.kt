@@ -89,12 +89,14 @@ private fun ScreenButton(
 
             RiscOsLabel(
                 text = icon,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
+                color = RiscOsColors.white
             )
             Spacer(modifier = Modifier.width(4.dp))
             RiscOsLabel(
                 text = screen.displayName,
-                maxLines = 1
+                maxLines = 1,
+                color = RiscOsColors.white
             )
         }
     }
