@@ -18,21 +18,22 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 /**
- * RISC OS themed colors
+ * NGE (Neon Genesis Evangelion) themed colors
  */
 object RiscOsColors {
-    val lightGray = Color(0xFFCCCCCC)
-    val mediumGray = Color(0xFFAAAAAA)
-    val darkGray = Color(0xFF888888)
-    val veryDarkGray = Color(0xFF444444)
-    val white = Color(0xFFFFFFFF)
+    // NGE Purple shades
+    val lightGray = Color(0xFF6B4C7A)
+    val mediumGray = Color(0xFF1A0A2E)
+    val darkGray = Color(0xFF3F2E4D)
+    val veryDarkGray = Color(0xFF0F0520)
+    val white = Color(0xFFF0E5FF)
     val black = Color(0xFF000000)
 
-    // Classic RISC OS action buttons
-    val actionBlue = Color(0xFF0066CC)
-    val actionGreen = Color(0xFF00AA00)
-    val actionRed = Color(0xFFCC0000)
-    val actionYellow = Color(0xFFFFDD00)
+    // NGE signature colors
+    val actionBlue = Color(0xFF9D4EDD)  // NGE purple
+    val actionGreen = Color(0xFF00FF41)  // Terminal green
+    val actionRed = Color(0xFFFF0055)    // Warning red
+    val actionYellow = Color(0xFFFF6B00) // NGE orange
 }
 
 /**

@@ -4,56 +4,74 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <!-- RISC OS styled icon with window frame and rotation symbol -->
-
-    <!-- Main window background (light gray) -->
+    <!-- NGE themed circular rotation icon -->
+    <!-- Background circle (dark purple) -->
     <path
-        android:fillColor="#CCCCCC"
-        android:pathData="M32,32 L76,32 L76,76 L32,76 Z"/>
+        android:fillColor="#1A0A2E"
+        android:pathData="M54,54 m-40,0 a40,40 0,1,1 80,0 a40,40 0,1,1 -80,0"/>
 
-    <!-- Title bar (RISC OS blue) -->
+    <!-- Outer ring (NGE purple) -->
     <path
-        android:fillColor="#0066CC"
-        android:pathData="M32,32 L76,32 L76,42 L32,42 Z"/>
-
-    <!-- Window border - top light highlight -->
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M30,30 L78,30 L78,32 L32,32 L32,78 L30,78 Z"/>
-
-    <!-- Window border - bottom dark shadow -->
-    <path
-        android:fillColor="#444444"
-        android:pathData="M32,78 L78,78 L78,30 L76,30 L76,76 L32,76 Z"/>
-
-    <!-- Inner shadow on title bar -->
-    <path
-        android:fillColor="#004499"
-        android:pathData="M32,41 L76,41 L76,42 L32,42 Z"/>
-
-    <!-- Rotation arrows in center -->
-    <!-- Circular rotation symbol -->
-    <path
-        android:fillColor="#000000"
-        android:pathData="M54,50 C57.31,50 60,52.69 60,56 C60,59.31 57.31,62 54,62 C50.69,62 48,59.31 48,56 L48,52 L50,52 L50,56 C50,58.21 51.79,60 54,60 C56.21,60 58,58.21 58,56 C58,53.79 56.21,52 54,52 L54,50 Z"/>
-
-    <!-- Rotation arrow pointing right -->
-    <path
-        android:fillColor="#000000"
-        android:pathData="M54,48 L58,51 L54,54 Z"/>
-
-    <!-- Screen rectangle with rotation -->
-    <path
-        android:strokeColor="#000000"
-        android:strokeWidth="1.5"
+        android:strokeColor="#9D4EDD"
+        android:strokeWidth="4"
         android:fillColor="#00000000"
-        android:pathData="M50,54 L52,54 L54,52 L56,54 L58,54 L58,58 L50,58 Z"/>
+        android:pathData="M54,54 m-38,0 a38,38 0,1,1 76,0 a38,38 0,1,1 -76,0"/>
 
-    <!-- Decorative corners (RISC OS style) -->
+    <!-- Warning stripes background -->
     <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M34,34 L36,34 L36,36 L34,36 Z"/>
+        android:fillColor="#3F2E4D"
+        android:pathData="M20,50 L88,50 L88,58 L20,58 Z"/>
+
+    <!-- Circular rotation arrows (NGE orange) -->
+    <!-- Top right curved arrow -->
     <path
-        android:fillColor="#444444"
-        android:pathData="M74,74 L76,74 L76,76 L74,76 Z"/>
+        android:strokeColor="#FF6B00"
+        android:strokeWidth="5"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000"
+        android:pathData="M68,40 A20,20 0,1,1 68,68"/>
+
+    <!-- Arrow head top right -->
+    <path
+        android:fillColor="#FF6B00"
+        android:pathData="M68,36 L72,44 L64,44 Z"/>
+
+    <!-- Bottom left curved arrow -->
+    <path
+        android:strokeColor="#9D4EDD"
+        android:strokeWidth="5"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000"
+        android:pathData="M40,68 A20,20 0,1,1 40,40"/>
+
+    <!-- Arrow head bottom left -->
+    <path
+        android:fillColor="#9D4EDD"
+        android:pathData="M40,72 L36,64 L44,64 Z"/>
+
+    <!-- Center circle (bright accent) -->
+    <path
+        android:fillColor="#00FF41"
+        android:pathData="M54,54 m-6,0 a6,6 0,1,1 12,0 a6,6 0,1,1 -12,0"/>
+
+    <!-- Inner ring detail -->
+    <path
+        android:strokeColor="#00FF41"
+        android:strokeWidth="2"
+        android:fillColor="#00000000"
+        android:pathData="M54,54 m-10,0 a10,10 0,1,1 20,0 a10,10 0,1,1 -20,0"/>
+
+    <!-- Warning corner markers -->
+    <path
+        android:fillColor="#FF0055"
+        android:pathData="M22,22 L26,22 L26,26 L22,26 Z"/>
+    <path
+        android:fillColor="#FF0055"
+        android:pathData="M82,22 L86,22 L86,26 L82,26 Z"/>
+    <path
+        android:fillColor="#FF0055"
+        android:pathData="M22,82 L26,82 L26,86 L22,86 Z"/>
+    <path
+        android:fillColor="#FF0055"
+        android:pathData="M82,82 L86,82 L86,86 L82,86 Z"/>
 </vector>
