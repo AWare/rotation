@@ -11,6 +11,7 @@ import app.rotatescreen.data.repository.OrientationRepository
 import app.rotatescreen.domain.model.AppOrientationSetting
 import app.rotatescreen.domain.model.ScreenOrientation
 import app.rotatescreen.domain.model.TargetScreen
+import app.rotatescreen.service.OrientationControlService
 import app.rotatescreen.ui.MainActivity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -52,34 +53,51 @@ class CurrentAppTileService : TileService() {
         val packageName = currentAppPackage
         if (packageName != null) {
             serviceScope?.launch {
-                // Get current setting
-                val currentSetting = repository?.getSetting(packageName)?.getOrNull()
-                val currentOrientation = currentSetting?.orientation ?: ScreenOrientation.Unspecified
+                try {
+                    // Get current setting
+                    val currentSetting = repository?.getSetting(packageName)?.getOrNull()
+                    val currentOrientation = currentSetting?.orientation ?: ScreenOrientation.Unspecified
 
-                // Find next orientation
-                val currentIndex = orientationCycle.indexOf(currentOrientation)
-                val nextIndex = (currentIndex + 1) % orientationCycle.size
-                val nextOrientation = orientationCycle[nextIndex]
+                    // Find next orientation
+                    val currentIndex = orientationCycle.indexOf(currentOrientation)
+                    val nextIndex = (currentIndex + 1) % orientationCycle.size
+                    val nextOrientation = orientationCycle[nextIndex]
 
-                // Get app name
-                val appName = try {
-                    packageManager.getApplicationInfo(packageName, 0)
-                        .loadLabel(packageManager).toString()
+                    // Get app name
+                    val appName = try {
+                        packageManager.getApplicationInfo(packageName, 0)
+                            .loadLabel(packageManager).toString()
+                    } catch (e: Exception) {
+                        packageName
+                    }
+
+                    // Save setting
+                    val newSetting = AppOrientationSetting.create(
+                        packageName = packageName,
+                        appName = appName,
+                        orientation = nextOrientation,
+                        targetScreen = currentSetting?.targetScreen ?: TargetScreen.AllScreens
+                    )
+                    repository?.saveSetting(newSetting)
+
+                    // Apply the orientation immediately (this was missing!)
+                    val intent = Intent(this@CurrentAppTileService, OrientationControlService::class.java).apply {
+                        action = OrientationControlService.ACTION_SET_ORIENTATION
+                        putExtra(OrientationControlService.EXTRA_ORIENTATION, nextOrientation.value)
+                        putExtra(OrientationControlService.EXTRA_SCREEN_ID, (currentSetting?.targetScreen ?: TargetScreen.AllScreens).id)
+                    }
+                    startService(intent)
+
+                    // Update tile
+                    updateTileForApp(packageName, appName, nextOrientation)
                 } catch (e: Exception) {
-                    packageName
+                    android.util.Log.e("CurrentAppTileService", "Error in onClick", e)
+                    qsTile?.apply {
+                        state = Tile.STATE_INACTIVE
+                        label = "Error"
+                        updateTile()
+                    }
                 }
-
-                // Save setting
-                val newSetting = AppOrientationSetting.create(
-                    packageName = packageName,
-                    appName = appName,
-                    orientation = nextOrientation,
-                    targetScreen = currentSetting?.targetScreen ?: TargetScreen.AllScreens
-                )
-                repository?.saveSetting(newSetting)
-
-                // Update tile
-                updateTileForApp(packageName, appName, nextOrientation)
             }
         } else {
             qsTile?.apply {

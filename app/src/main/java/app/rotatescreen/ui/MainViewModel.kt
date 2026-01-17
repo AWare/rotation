@@ -125,6 +125,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
 
             // Query all apps with launcher activities directly
+            // Note: Use 0 for default query, not MATCH_ALL which is for package queries
             val launcherIntent = Intent(Intent.ACTION_MAIN, null).apply {
                 addCategory(Intent.CATEGORY_LAUNCHER)
             }
@@ -132,11 +133,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val resolveInfos = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 packageManager.queryIntentActivities(
                     launcherIntent,
-                    PackageManager.ResolveInfoFlags.of(PackageManager.MATCH_ALL.toLong())
+                    PackageManager.ResolveInfoFlags.of(0)
                 )
             } else {
                 @Suppress("DEPRECATION")
-                packageManager.queryIntentActivities(launcherIntent, PackageManager.MATCH_ALL)
+                packageManager.queryIntentActivities(launcherIntent, 0)
             }
 
             val installedAppsWithLauncher = resolveInfos.mapNotNull { resolveInfo ->
