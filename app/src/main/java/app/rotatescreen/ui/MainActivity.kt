@@ -2,6 +2,7 @@ package app.rotatescreen.ui
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.fillMaxSize
@@ -54,6 +55,12 @@ fun RotationNavHost(viewModel: MainViewModel) {
         startDestination = Screen.Global.route
     ) {
         composable(Screen.Global.route) {
+            // Handle back press on main screen to exit app
+            BackHandler {
+                // Do nothing - prevents navigating back from main screen
+                // User must use home button to exit
+            }
+
             MainScreen(
                 viewModel = viewModel,
                 onNavigateToPerApp = {

@@ -117,9 +117,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 emptySet()
             }
 
-            // Get all user apps and prioritize recent ones
+            // Get all user apps and prioritize recent ones, excluding this app
             val allApps = packageManager.getInstalledApplications(PackageManager.GET_META_DATA)
                 .filter { it.flags and ApplicationInfo.FLAG_SYSTEM == 0 }
+                .filter { it.packageName != context.packageName } // Exclude this app
                 .mapNotNull { appInfo ->
                     try {
                         InstalledApp(

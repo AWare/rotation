@@ -40,9 +40,9 @@ fun PerAppSettingsScreen(
     // Check usage stats permission
     val hasUsageStatsPermission = remember { viewModel.hasUsageStatsPermission() }
 
-    // Get top 5 recent apps
+    // Get top 5 apps (prioritizes recent ones since list is already sorted)
     val topRecentApps = remember(filteredApps) {
-        filteredApps.filter { it.isRecent }.take(5)
+        filteredApps.take(5)
     }
 
     Column(
