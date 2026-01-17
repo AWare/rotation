@@ -9,6 +9,12 @@
     <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS"
         tools:ignore="ProtectedPermissions" />
 
+    <!-- Required on Android 11+ to see all installed packages -->
+    <!-- Justification: This app provides per-app rotation control and needs to enumerate
+         all installed apps so users can configure orientation settings for any app -->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"
+        tools:ignore="QueryAllPackagesPermission" />
+
     <application
         android:name=".RotationApplication"
         android:allowBackup="true"
