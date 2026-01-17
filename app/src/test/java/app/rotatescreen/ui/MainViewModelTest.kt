@@ -2,27 +2,40 @@ package app.rotatescreen.ui
 
 import android.app.Application
 import android.content.Context
+import android.content.Intent
+import android.content.pm.ActivityInfo
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
+import android.content.pm.ResolveInfo
+import android.hardware.display.DisplayManager
+import android.view.Display
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
 import app.cash.turbine.test
 import app.rotatescreen.data.local.RotationDatabase
 import app.rotatescreen.data.local.dao.AppOrientationDao
 import app.rotatescreen.data.preferences.PreferencesManager
+import app.rotatescreen.domain.model.AppOrientationSetting
 import app.rotatescreen.domain.model.ScreenOrientation
+import app.rotatescreen.domain.model.TargetScreen
+import app.rotatescreen.service.OrientationControlService
+import app.rotatescreen.util.AccessibilityChecker
+import app.rotatescreen.util.PermissionChecker
+import arrow.core.Either
 import io.mockk.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.*
 import org.junit.After
-import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
@@ -33,9 +46,11 @@ class MainViewModelTest {
     val instantTaskExecutorRule = InstantTaskExecutorRule()
 
     private val testDispatcher = StandardTestDispatcher()
+
     private lateinit var application: Application
     private lateinit var context: Context
     private lateinit var packageManager: PackageManager
+    private lateinit var displayManager: DisplayManager
     private lateinit var database: RotationDatabase
     private lateinit var dao: AppOrientationDao
 
@@ -43,16 +58,18 @@ class MainViewModelTest {
     fun setup() {
         Dispatchers.setMain(testDispatcher)
 
-        // Mock Android dependencies
+        // Mock Android components
         application = mockk(relaxed = true)
         context = mockk(relaxed = true)
         packageManager = mockk(relaxed = true)
+        displayManager = mockk(relaxed = true)
         database = mockk(relaxed = true)
         dao = mockk(relaxed = true)
 
         every { application.applicationContext } returns context
+        every { context.packageName } returns "app.rotatescreen"
         every { context.packageManager } returns packageManager
-        every { packageManager.getInstalledApplications(any()) } returns emptyList()
+        every { context.getSystemService(Context.DISPLAY_SERVICE) } returns displayManager
 
         // Mock database
         mockkStatic(RotationDatabase::class)
@@ -65,12 +82,276 @@ class MainViewModelTest {
         mockkConstructor(PreferencesManager::class)
         every { anyConstructed<PreferencesManager>().globalOrientation } returns flowOf(ScreenOrientation.Unspecified)
         every { anyConstructed<PreferencesManager>().lastTileOrientation } returns flowOf(ScreenOrientation.Unspecified)
+
+        // Mock display manager
+        val mockDisplay = mockk<Display>(relaxed = true)
+        every { mockDisplay.displayId } returns 0
+        every { displayManager.displays } returns arrayOf(mockDisplay)
+
+        // Mock static utility classes
+        mockkStatic(PermissionChecker::class)
+        mockkStatic(AccessibilityChecker::class)
+        every { PermissionChecker.hasDrawOverlayPermission(any()) } returns Either.Right(false)
+        every { AccessibilityChecker.isAccessibilityServiceEnabled(any()) } returns Either.Right(false)
+
+        // Default mock for queryIntentActivities
+        every { packageManager.queryIntentActivities(any(), any<Int>()) } returns emptyList()
     }
 
     @After
-    fun teardown() {
+    fun tearDown() {
         Dispatchers.resetMain()
         unmockkAll()
+    }
+
+    @Test
+    fun `app enumeration excludes self package`() = runTest {
+        // Arrange
+        val launcherApps = listOf(
+            createResolveInfo("com.example.app1", "App 1"),
+            createResolveInfo("app.rotatescreen", "Rotation App"), // Should be excluded
+            createResolveInfo("com.example.app2", "App 2")
+        )
+
+        every { packageManager.queryIntentActivities(any(), any<Int>()) } returns launcherApps
+
+        // Act
+        val viewModel = MainViewModel(application)
+        testScheduler.advanceUntilIdle()
+
+        // Assert
+        viewModel.installedApps.test {
+            val apps = awaitItem()
+            assertEquals(2, apps.size)
+            assertFalse(apps.any { it.packageName == "app.rotatescreen" })
+            assertTrue(apps.any { it.packageName == "com.example.app1" })
+            assertTrue(apps.any { it.packageName == "com.example.app2" })
+        }
+    }
+
+    @Test
+    fun `app enumeration handles exceptions gracefully`() = runTest {
+        // Arrange
+        val launcherApps = listOf(
+            createResolveInfo("com.example.app1", "App 1"),
+            createResolveInfo("com.example.corrupted", "Corrupted App")
+        )
+
+        every { packageManager.queryIntentActivities(any(), any<Int>()) } returns launcherApps
+        every { packageManager.getApplicationInfo("com.example.corrupted", 0) } throws Exception("App corrupted")
+
+        // Act
+        val viewModel = MainViewModel(application)
+        testScheduler.advanceUntilIdle()
+
+        // Assert
+        viewModel.installedApps.test {
+            val apps = awaitItem()
+            assertEquals(1, apps.size)
+            assertEquals("com.example.app1", apps[0].packageName)
+        }
+    }
+
+    @Test
+    fun `search query filters apps case insensitively`() = runTest {
+        // Arrange
+        val launcherApps = listOf(
+            createResolveInfo("com.example.calculator", "Calculator"),
+            createResolveInfo("com.example.calendar", "Calendar"),
+            createResolveInfo("com.example.camera", "Camera")
+        )
+
+        every { packageManager.queryIntentActivities(any(), any<Int>()) } returns launcherApps
+
+        val viewModel = MainViewModel(application)
+        testScheduler.advanceUntilIdle()
+
+        // Act
+        viewModel.updateSearchQuery("CAL")
+        testScheduler.advanceUntilIdle()
+
+        // Assert
+        viewModel.filteredApps.test {
+            val filtered = awaitItem()
+            assertEquals(2, filtered.size)
+            assertTrue(filtered.any { it.appName == "Calculator" })
+            assertTrue(filtered.any { it.appName == "Calendar" })
+            assertFalse(filtered.any { it.appName == "Camera" })
+        }
+    }
+
+    @Test
+    fun `apps with saved settings included even if not installed`() = runTest {
+        // Arrange
+        val launcherApps = listOf(
+            createResolveInfo("com.example.installed", "Installed App")
+        )
+
+        val savedSettings = listOf(
+            AppOrientationSetting.create(
+                packageName = "com.example.installed",
+                appName = "Installed App",
+                orientation = ScreenOrientation.Portrait
+            ),
+            AppOrientationSetting.create(
+                packageName = "com.example.uninstalled",
+                appName = "Uninstalled App",
+                orientation = ScreenOrientation.Landscape
+            )
+        )
+
+        every { packageManager.queryIntentActivities(any(), any<Int>()) } returns launcherApps
+        every { dao.getAll() } returns flowOf(savedSettings.map { it.toEntity() })
+
+        // Act
+        val viewModel = MainViewModel(application)
+        testScheduler.advanceUntilIdle()
+
+        // Assert
+        viewModel.installedApps.test {
+            val apps = awaitItem()
+            assertEquals(2, apps.size)
+
+            val installedApp = apps.find { it.packageName == "com.example.installed" }
+            assertTrue(installedApp!!.isInstalled)
+
+            val uninstalledApp = apps.find { it.packageName == "com.example.uninstalled" }
+            assertFalse(uninstalledApp!!.isInstalled)
+        }
+    }
+
+    @Test
+    fun `setAppOrientation refreshes app list`() = runTest {
+        // Arrange
+        val launcherApps = listOf(
+            createResolveInfo("com.example.app", "Test App")
+        )
+
+        every { packageManager.queryIntentActivities(any(), any<Int>()) } returns launcherApps
+        coEvery { dao.insert(any()) } just Runs
+
+        val viewModel = MainViewModel(application)
+        testScheduler.advanceUntilIdle()
+
+        // Act
+        viewModel.setAppOrientation("com.example.app", "Test App", ScreenOrientation.Portrait)
+        testScheduler.advanceUntilIdle()
+
+        // Assert - verify queryIntentActivities called again after save
+        verify(atLeast = 2) { packageManager.queryIntentActivities(any(), any<Int>()) }
+    }
+
+    @Test
+    fun `removeAppSetting refreshes app list`() = runTest {
+        // Arrange
+        val launcherApps = listOf(
+            createResolveInfo("com.example.app", "Test App")
+        )
+
+        every { packageManager.queryIntentActivities(any(), any<Int>()) } returns launcherApps
+        coEvery { dao.delete(any()) } just Runs
+
+        val viewModel = MainViewModel(application)
+        testScheduler.advanceUntilIdle()
+
+        // Act
+        viewModel.removeAppSetting("com.example.app")
+        testScheduler.advanceUntilIdle()
+
+        // Assert
+        verify(atLeast = 2) { packageManager.queryIntentActivities(any(), any<Int>()) }
+    }
+
+    @Test
+    fun `duplicate packages removed with distinctBy`() = runTest {
+        // Arrange - Same package with multiple launcher activities
+        val launcherApps = listOf(
+            createResolveInfo("com.example.app", "App Activity 1"),
+            createResolveInfo("com.example.app", "App Activity 2"),
+            createResolveInfo("com.example.different", "Different App")
+        )
+
+        every { packageManager.queryIntentActivities(any(), any<Int>()) } returns launcherApps
+
+        // Act
+        val viewModel = MainViewModel(application)
+        testScheduler.advanceUntilIdle()
+
+        // Assert
+        viewModel.installedApps.test {
+            val apps = awaitItem()
+            assertEquals(2, apps.size) // Only 2 distinct packages
+            assertTrue(apps.any { it.packageName == "com.example.app" })
+            assertTrue(apps.any { it.packageName == "com.example.different" })
+        }
+    }
+
+    @Test
+    fun `race condition handled with firstOrNull`() = runTest {
+        // Arrange - Empty flow
+        every { dao.getAll() } returns flowOf()
+
+        val launcherApps = listOf(createResolveInfo("com.example.app", "Test App"))
+        every { packageManager.queryIntentActivities(any(), any<Int>()) } returns launcherApps
+
+        // Act - Should not throw NoSuchElementException
+        val viewModel = MainViewModel(application)
+        testScheduler.advanceUntilIdle()
+
+        // Assert
+        viewModel.installedApps.test {
+            val apps = awaitItem()
+            assertEquals(1, apps.size)
+        }
+    }
+
+    @Test
+    fun `DisplayManager initialization uses safe is check`() = runTest {
+        // Arrange
+        every { context.getSystemService(Context.DISPLAY_SERVICE) } returns displayManager
+
+        // Act - Should not throw ClassCastException
+        val viewModel = MainViewModel(application)
+        testScheduler.advanceUntilIdle()
+
+        // Assert
+        viewModel.availableScreens.test {
+            val screens = awaitItem()
+            assertTrue(screens.isNotEmpty())
+        }
+    }
+
+    @Test
+    fun `applyOrientation handles service start exceptions`() = runTest {
+        // Arrange
+        every { context.startService(any()) } throws SecurityException("No permission")
+        coEvery { anyConstructed<PreferencesManager>().setGlobalOrientation(any()) } just Runs
+
+        val viewModel = MainViewModel(application)
+        testScheduler.advanceUntilIdle()
+
+        // Act - Should not crash
+        viewModel.setGlobalOrientation(ScreenOrientation.Portrait)
+        testScheduler.advanceUntilIdle()
+
+        // Assert - Exception logged, no crash
+        verify { context.startService(any()) }
+    }
+
+    @Test
+    fun `flashScreen handles service start exceptions`() = runTest {
+        // Arrange
+        every { context.startService(any()) } throws SecurityException("No permission")
+
+        val viewModel = MainViewModel(application)
+        testScheduler.advanceUntilIdle()
+
+        // Act - Should not crash
+        viewModel.flashScreen(TargetScreen.AllScreens)
+        testScheduler.advanceUntilIdle()
+
+        // Assert - Exception logged, no crash
+        verify { context.startService(any()) }
     }
 
     @Test
@@ -80,7 +361,6 @@ class MainViewModelTest {
 
         val state = viewModel.state.value
         assertEquals(ScreenOrientation.Unspecified, state.globalOrientation)
-        assertNull(state.currentApp)
         assertTrue(state.perAppSettings.isEmpty())
         assertFalse(state.isAccessibilityServiceEnabled)
         assertFalse(state.hasDrawOverlayPermission)
@@ -98,49 +378,6 @@ class MainViewModelTest {
     }
 
     @Test
-    fun `filteredApps filters by search query`() = runTest {
-        val apps = listOf(
-            ApplicationInfo().apply {
-                packageName = "com.test.app1"
-                nonLocalizedLabel = "Test App"
-            },
-            ApplicationInfo().apply {
-                packageName = "com.other.app"
-                nonLocalizedLabel = "Other App"
-            }
-        )
-        every { packageManager.getInstalledApplications(any()) } returns apps
-
-        val viewModel = MainViewModel(application)
-        testScheduler.advanceUntilIdle()
-
-        viewModel.filteredApps.test {
-            val initial = awaitItem()
-            assertEquals(2, initial.size)
-
-            viewModel.updateSearchQuery("Test")
-            testScheduler.advanceUntilIdle()
-
-            val filtered = awaitItem()
-            assertEquals(1, filtered.size)
-            assertEquals("Test App", filtered[0].appName)
-        }
-    }
-
-    @Test
-    fun `setGlobalOrientation updates state`() = runTest {
-        coEvery { anyConstructed<PreferencesManager>().setGlobalOrientation(any()) } returns mockk()
-
-        val viewModel = MainViewModel(application)
-        testScheduler.advanceUntilIdle()
-
-        viewModel.setGlobalOrientation(ScreenOrientation.Portrait)
-        testScheduler.advanceUntilIdle()
-
-        coVerify { anyConstructed<PreferencesManager>().setGlobalOrientation(ScreenOrientation.Portrait) }
-    }
-
-    @Test
     fun `checkPermissions updates permission states`() = runTest {
         val viewModel = MainViewModel(application)
         testScheduler.advanceUntilIdle()
@@ -153,4 +390,29 @@ class MainViewModelTest {
         assertFalse(state.hasDrawOverlayPermission)
         assertFalse(state.isAccessibilityServiceEnabled)
     }
+
+    // Helper function to create mock ResolveInfo
+    private fun createResolveInfo(packageName: String, label: String): ResolveInfo {
+        val resolveInfo = mockk<ResolveInfo>(relaxed = true)
+        val activityInfo = mockk<ActivityInfo>(relaxed = true)
+        val appInfo = mockk<ApplicationInfo>(relaxed = true)
+
+        activityInfo.packageName = packageName
+        activityInfo.applicationInfo = appInfo
+        resolveInfo.activityInfo = activityInfo
+
+        every { packageManager.getApplicationInfo(packageName, 0) } returns appInfo
+        every { appInfo.loadLabel(packageManager) } returns label
+
+        return resolveInfo
+    }
+
+    // Helper to convert setting to entity for DAO mock
+    private fun AppOrientationSetting.toEntity() = app.rotatescreen.data.local.entity.AppOrientationEntity(
+        packageName = packageName,
+        appName = appName,
+        orientation = orientation.value,
+        targetScreenId = targetScreen.id,
+        enabled = enabled
+    )
 }
