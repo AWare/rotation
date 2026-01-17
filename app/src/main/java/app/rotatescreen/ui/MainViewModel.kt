@@ -56,6 +56,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _selectedAppScreens = MutableStateFlow<Map<String, TargetScreen>>(emptyMap())
 
+    // Debug info for troubleshooting app enumeration
+    private val _debugInfo = MutableStateFlow("")
+    val debugInfo: StateFlow<String> = _debugInfo.asStateFlow()
+
     val filteredApps: StateFlow<List<InstalledApp>> = combine(
         installedApps,
         searchQuery
@@ -100,6 +104,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private fun loadInstalledApps() {
         viewModelScope.launch(Dispatchers.IO) {
             val packageManager = context.packageManager
+            val debugLines = mutableListOf<String>()
+
+            debugLines.add("=== APP ENUMERATION DEBUG ===")
+            debugLines.add("Android SDK: ${Build.VERSION.SDK_INT}")
+            debugLines.add("Package: ${context.packageName}")
+            debugLines.add("")
 
             // Get recently used apps
             val recentApps = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1) {
@@ -143,6 +153,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 packageManager.queryIntentActivities(launcherIntent, queryFlags)
             }
 
+            debugLines.add("queryIntentActivities returned: ${resolveInfos.size} apps")
             android.util.Log.d("MainViewModel", "Found ${resolveInfos.size} apps from queryIntentActivities")
 
             val installedAppsWithLauncher = resolveInfos.mapNotNull { resolveInfo ->
@@ -166,10 +177,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }.distinctBy { it.packageName }
 
+            debugLines.add("After filtering (excluding self): ${installedAppsWithLauncher.size} apps")
             android.util.Log.d("MainViewModel", "After filtering: ${installedAppsWithLauncher.size} apps")
 
             // Get all saved settings to include apps that may not have launcher activities
             val savedSettings = repository.getAllSettings().firstOrNull() ?: emptyList()
+            debugLines.add("Saved settings: ${savedSettings.size} apps")
             val savedAppPackages = installedAppsWithLauncher.map { it.packageName }.toSet()
 
             val appsFromSettings = savedSettings.mapNotNull { setting ->
@@ -196,11 +209,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         .thenBy { it.appName }  // Then alphabetically
                 )
 
-            android.util.Log.d("MainViewModel", "Final app list: ${allApps.size} apps (${installedAppsWithLauncher.size} installed + ${appsFromSettings.size} from settings)")
+            debugLines.add("")
+            debugLines.add("FINAL TOTAL: ${allApps.size} apps")
+            debugLines.add("  - ${installedAppsWithLauncher.size} installed")
+            debugLines.add("  - ${appsFromSettings.size} from saved settings")
+            debugLines.add("")
+            debugLines.add("First 10 apps:")
             allApps.take(10).forEach { app ->
+                debugLines.add("  ${if (app.isInstalled) "✓" else "✗"} ${app.appName}")
                 android.util.Log.d("MainViewModel", "  - ${app.appName} (${app.packageName}) installed=${app.isInstalled}")
             }
 
+            _debugInfo.value = debugLines.joinToString("\n")
             _installedApps.value = allApps
         }
     }

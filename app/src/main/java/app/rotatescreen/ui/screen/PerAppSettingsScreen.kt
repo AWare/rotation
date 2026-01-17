@@ -34,6 +34,7 @@ fun PerAppSettingsScreen(
     val state by viewModel.state.collectAsState()
     val filteredApps by viewModel.filteredApps.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
+    val debugInfo by viewModel.debugInfo.collectAsState()
     val context = LocalContext.current
     val focusRequester = remember { FocusRequester() }
 
@@ -102,6 +103,21 @@ fun PerAppSettingsScreen(
                     text = "⚠ Tap to grant Usage Stats permission",
                     fontWeight = FontWeight.Bold,
                     color = RiscOsColors.black
+                )
+            }
+        }
+
+        // DEBUG INFO PANEL - Shows app enumeration statistics
+        if (debugInfo.isNotEmpty()) {
+            RiscOsWindow(
+                title = "🔍 DEBUG INFO (Screenshot This!)",
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = debugInfo,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = MaterialTheme.typography.bodySmall.fontSize,
+                    modifier = Modifier.fillMaxWidth()
                 )
             }
         }
