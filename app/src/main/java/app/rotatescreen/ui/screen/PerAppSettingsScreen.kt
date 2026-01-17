@@ -40,9 +40,13 @@ fun PerAppSettingsScreen(
     // Check usage stats permission
     val hasUsageStatsPermission = remember { viewModel.hasUsageStatsPermission() }
 
-    // Get top 5 apps (prioritizes recent ones since list is already sorted)
-    val topRecentApps = remember(filteredApps) {
-        filteredApps.take(5)
+    // If permission granted: show top 5 recent apps. If not granted: show all apps
+    val displayedApps = remember(filteredApps, hasUsageStatsPermission) {
+        if (hasUsageStatsPermission) {
+            filteredApps.take(5)
+        } else {
+            filteredApps
+        }
     }
 
     Column(
@@ -111,7 +115,7 @@ fun PerAppSettingsScreen(
         if (state.isAccessibilityServiceEnabled) {
             // App picker and configuration
             RiscOsWindow(
-                title = "Recent Apps",
+                title = if (hasUsageStatsPermission) "Recent Apps (Top 5)" else "All Apps",
                 modifier = Modifier.fillMaxSize()
             ) {
                 Column(
@@ -120,8 +124,8 @@ fun PerAppSettingsScreen(
                         .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    // Top 5 recent apps with icons
-                    if (topRecentApps.isNotEmpty()) {
+                    // Display apps based on permission
+                    if (displayedApps.isNotEmpty()) {
                         RiscOsPanel(
                             inset = true,
                             modifier = Modifier.fillMaxWidth()
@@ -129,7 +133,7 @@ fun PerAppSettingsScreen(
                             Column(
                                 verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                topRecentApps.forEach { app ->
+                                displayedApps.forEach { app ->
                                     val currentSetting = state.perAppSettings[app.packageName]
                                     val isSelected = selectedAppForConfig == app.packageName
 
@@ -202,7 +206,7 @@ fun PerAppSettingsScreen(
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             RiscOsLabel(
-                                text = "No recent apps found. Open some apps to configure them.",
+                                text = "No apps found.",
                                 maxLines = 3
                             )
                         }
