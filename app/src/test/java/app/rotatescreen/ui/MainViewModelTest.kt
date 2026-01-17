@@ -391,6 +391,74 @@ class MainViewModelTest {
         assertFalse(state.isAccessibilityServiceEnabled)
     }
 
+    @Test
+    fun `queryIntentActivities uses correct flags for launcher enumeration`() = runTest {
+        // Arrange
+        val launcherApps = listOf(
+            createResolveInfo("com.android.chrome", "Chrome"),
+            createResolveInfo("com.google.android.gm", "Gmail"),
+            createResolveInfo("com.android.settings", "Settings"),
+            createResolveInfo("com.android.calculator2", "Calculator"),
+            createResolveInfo("com.android.calendar", "Calendar"),
+            createResolveInfo("com.spotify.music", "Spotify"),
+            createResolveInfo("com.whatsapp", "WhatsApp"),
+            createResolveInfo("com.instagram.android", "Instagram")
+        )
+
+        every { packageManager.queryIntentActivities(any(), any<Int>()) } returns launcherApps
+
+        // Act
+        val viewModel = MainViewModel(application)
+        testScheduler.advanceUntilIdle()
+
+        // Assert - Verify queryIntentActivities called with correct flags
+        verify {
+            packageManager.queryIntentActivities(
+                match { intent ->
+                    intent.action == Intent.ACTION_MAIN &&
+                    intent.categories?.contains(Intent.CATEGORY_LAUNCHER) == true
+                },
+                match { flags ->
+                    // Verify flags include MATCH_DISABLED_COMPONENTS
+                    (flags and PackageManager.MATCH_DISABLED_COMPONENTS) != 0
+                }
+            )
+        }
+
+        // Verify all apps are loaded (excluding self)
+        viewModel.installedApps.test {
+            val apps = awaitItem()
+            assertEquals(8, apps.size)
+            assertTrue(apps.any { it.packageName == "com.android.chrome" })
+            assertTrue(apps.any { it.packageName == "com.spotify.music" })
+        }
+    }
+
+    @Test
+    fun `app enumeration includes disabled apps with MATCH_DISABLED_COMPONENTS flag`() = runTest {
+        // Arrange
+        val launcherApps = listOf(
+            createResolveInfo("com.example.enabled", "Enabled App"),
+            createResolveInfo("com.example.disabled", "Disabled App"),
+            createResolveInfo("com.example.disabled_until_used", "Disabled Until Used App")
+        )
+
+        every { packageManager.queryIntentActivities(any(), any<Int>()) } returns launcherApps
+
+        // Act
+        val viewModel = MainViewModel(application)
+        testScheduler.advanceUntilIdle()
+
+        // Assert - All apps should be included
+        viewModel.installedApps.test {
+            val apps = awaitItem()
+            assertEquals(3, apps.size)
+            assertTrue(apps.any { it.packageName == "com.example.enabled" })
+            assertTrue(apps.any { it.packageName == "com.example.disabled" })
+            assertTrue(apps.any { it.packageName == "com.example.disabled_until_used" })
+        }
+    }
+
     // Helper function to create mock ResolveInfo
     private fun createResolveInfo(packageName: String, label: String): ResolveInfo {
         val resolveInfo = mockk<ResolveInfo>(relaxed = true)

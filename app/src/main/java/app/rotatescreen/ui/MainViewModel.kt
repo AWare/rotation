@@ -124,21 +124,26 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 emptySet()
             }
 
-            // Query all apps with launcher activities directly
-            // Note: Use 0 for default query, not MATCH_ALL which is for package queries
+            // Query all apps with launcher activities
+            // Use flags that Android launchers use to see all apps including disabled ones
             val launcherIntent = Intent(Intent.ACTION_MAIN, null).apply {
                 addCategory(Intent.CATEGORY_LAUNCHER)
             }
 
+            val queryFlags = PackageManager.MATCH_DISABLED_COMPONENTS or
+                            PackageManager.MATCH_DISABLED_UNTIL_USED_COMPONENTS
+
             val resolveInfos = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 packageManager.queryIntentActivities(
                     launcherIntent,
-                    PackageManager.ResolveInfoFlags.of(0)
+                    PackageManager.ResolveInfoFlags.of(queryFlags.toLong())
                 )
             } else {
                 @Suppress("DEPRECATION")
-                packageManager.queryIntentActivities(launcherIntent, 0)
+                packageManager.queryIntentActivities(launcherIntent, queryFlags)
             }
+
+            android.util.Log.d("MainViewModel", "Found ${resolveInfos.size} apps from queryIntentActivities")
 
             val installedAppsWithLauncher = resolveInfos.mapNotNull { resolveInfo ->
                 try {
@@ -160,6 +165,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     null
                 }
             }.distinctBy { it.packageName }
+
+            android.util.Log.d("MainViewModel", "After filtering: ${installedAppsWithLauncher.size} apps")
 
             // Get all saved settings to include apps that may not have launcher activities
             val savedSettings = repository.getAllSettings().firstOrNull() ?: emptyList()
@@ -188,6 +195,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         .thenByDescending { it.isRecent }  // Then recent
                         .thenBy { it.appName }  // Then alphabetically
                 )
+
+            android.util.Log.d("MainViewModel", "Final app list: ${allApps.size} apps (${installedAppsWithLauncher.size} installed + ${appsFromSettings.size} from settings)")
+            allApps.take(10).forEach { app ->
+                android.util.Log.d("MainViewModel", "  - ${app.appName} (${app.packageName}) installed=${app.isInstalled}")
+            }
 
             _installedApps.value = allApps
         }
