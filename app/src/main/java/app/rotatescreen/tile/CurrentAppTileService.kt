@@ -6,7 +6,6 @@ import android.os.Build
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
 import app.rotatescreen.data.local.RotationDatabase
-import app.rotatescreen.data.preferences.PreferencesManager
 import app.rotatescreen.data.repository.OrientationRepository
 import app.rotatescreen.domain.model.AppOrientationSetting
 import app.rotatescreen.domain.model.ScreenOrientation
@@ -36,8 +35,7 @@ class CurrentAppTileService : TileService() {
     override fun onCreate() {
         super.onCreate()
         val database = RotationDatabase.getInstance(applicationContext)
-        val prefs = PreferencesManager(applicationContext)
-        repository = OrientationRepository(database.appOrientationDao(), prefs)
+        repository = OrientationRepository(database.appOrientationDao())
     }
 
     override fun onStartListening() {
