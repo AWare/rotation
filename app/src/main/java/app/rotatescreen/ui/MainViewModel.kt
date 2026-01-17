@@ -251,6 +251,28 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         context.startActivity(intent)
     }
 
+    fun hasUsageStatsPermission(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP_MR1) {
+            return false
+        }
+        val usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE) as? android.app.usage.UsageStatsManager
+        val endTime = System.currentTimeMillis()
+        val startTime = endTime - 1000 * 60
+        val stats = usageStatsManager?.queryUsageStats(
+            android.app.usage.UsageStatsManager.INTERVAL_DAILY,
+            startTime,
+            endTime
+        )
+        return stats != null && stats.isNotEmpty()
+    }
+
+    fun requestUsageStatsPermission() {
+        val intent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        }
+        context.startActivity(intent)
+    }
+
     private fun applyOrientation(orientation: ScreenOrientation, targetScreen: TargetScreen) {
         val intent = Intent(context, OrientationControlService::class.java).apply {
             action = OrientationControlService.ACTION_SET_ORIENTATION

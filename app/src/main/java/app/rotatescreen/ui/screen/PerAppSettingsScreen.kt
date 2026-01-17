@@ -37,6 +37,9 @@ fun PerAppSettingsScreen(
 
     var selectedAppForConfig by remember { mutableStateOf<String?>(null) }
 
+    // Check usage stats permission
+    val hasUsageStatsPermission = remember { viewModel.hasUsageStatsPermission() }
+
     // Get top 5 recent apps
     val topRecentApps = remember(filteredApps) {
         filteredApps.filter { it.isRecent }.take(5)
@@ -78,7 +81,7 @@ fun PerAppSettingsScreen(
             )
         }
 
-        // Permission warning
+        // Permission warnings
         if (!state.isAccessibilityServiceEnabled) {
             RiscOsButton(
                 onClick = { viewModel.requestAccessibilityPermission() },
@@ -87,6 +90,19 @@ fun PerAppSettingsScreen(
             ) {
                 RiscOsLabel(
                     text = "⚠ Tap to enable Accessibility Service",
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+
+        if (!hasUsageStatsPermission) {
+            RiscOsButton(
+                onClick = { viewModel.requestUsageStatsPermission() },
+                backgroundColor = RiscOsColors.actionYellow,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                RiscOsLabel(
+                    text = "⚠ Tap to grant Usage Stats permission",
                     fontWeight = FontWeight.Bold
                 )
             }

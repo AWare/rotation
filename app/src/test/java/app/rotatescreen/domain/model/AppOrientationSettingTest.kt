@@ -73,4 +73,40 @@ class AppOrientationSettingTest {
         assertEquals("Test", app.appName)
         assertEquals("/path/to/icon", app.iconPath)
     }
+
+    @Test
+    fun `InstalledApp isRecent defaults to false`() {
+        val app = InstalledApp(
+            packageName = "com.test",
+            appName = "Test"
+        )
+
+        assertFalse(app.isRecent)
+    }
+
+    @Test
+    fun `InstalledApp isRecent can be true`() {
+        val app = InstalledApp(
+            packageName = "com.test",
+            appName = "Test",
+            isRecent = true
+        )
+
+        assertTrue(app.isRecent)
+    }
+
+    @Test
+    fun `InstalledApp with all parameters`() {
+        val app = InstalledApp(
+            packageName = "com.example.app",
+            appName = "Example App",
+            iconPath = "/path/to/icon.png",
+            isRecent = true
+        )
+
+        assertEquals("com.example.app", app.packageName)
+        assertEquals("Example App", app.appName)
+        assertEquals("/path/to/icon.png", app.iconPath)
+        assertTrue(app.isRecent)
+    }
 }

@@ -64,4 +64,45 @@ class TargetScreenTest {
         assertEquals(-1, TargetScreen.AllScreens.id)
         assertEquals("All Screens", TargetScreen.AllScreens.displayName)
     }
+
+    @Test
+    fun `SpecificScreen with aspect ratio portrait`() {
+        val screen = TargetScreen.SpecificScreen(1, "Test", AspectRatio.PORTRAIT)
+        assertEquals(AspectRatio.PORTRAIT, screen.ratio)
+        assertEquals(AspectRatio.PORTRAIT, screen.aspectRatio)
+    }
+
+    @Test
+    fun `SpecificScreen with aspect ratio landscape`() {
+        val screen = TargetScreen.SpecificScreen(1, "Test", AspectRatio.LANDSCAPE)
+        assertEquals(AspectRatio.LANDSCAPE, screen.ratio)
+        assertEquals(AspectRatio.LANDSCAPE, screen.aspectRatio)
+    }
+
+    @Test
+    fun `SpecificScreen with aspect ratio square`() {
+        val screen = TargetScreen.SpecificScreen(1, "Test", AspectRatio.SQUARE)
+        assertEquals(AspectRatio.SQUARE, screen.ratio)
+        assertEquals(AspectRatio.SQUARE, screen.aspectRatio)
+    }
+
+    @Test
+    fun `SpecificScreen defaults to landscape aspect ratio`() {
+        val screen = TargetScreen.SpecificScreen(1, "Test")
+        assertEquals(AspectRatio.LANDSCAPE, screen.ratio)
+    }
+
+    @Test
+    fun `fromId with aspect ratio creates SpecificScreen with correct ratio`() {
+        val result = TargetScreen.fromId(2, "Display", AspectRatio.PORTRAIT)
+        assertTrue(result.isRight())
+        val screen = result.getOrNull() as? TargetScreen.SpecificScreen
+        assertNotNull(screen)
+        assertEquals(AspectRatio.PORTRAIT, screen?.ratio)
+    }
+
+    @Test
+    fun `AllScreens has square aspect ratio`() {
+        assertEquals(AspectRatio.SQUARE, TargetScreen.AllScreens.aspectRatio)
+    }
 }

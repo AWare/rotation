@@ -118,11 +118,11 @@ private fun OrientationButton(
 
 private fun getOrientationSymbol(orientation: ScreenOrientation): String {
     return when (orientation) {
-        ScreenOrientation.Unspecified -> "↻"
-        ScreenOrientation.Portrait -> "▯"
-        ScreenOrientation.Landscape -> "▭"
-        ScreenOrientation.ReversePortrait -> "⤸"
-        ScreenOrientation.ReverseLandscape -> "⤹"
+        ScreenOrientation.Unspecified -> "⟲"
+        ScreenOrientation.Portrait -> "☰"     // Horizontal lines (portrait mode)
+        ScreenOrientation.Landscape -> "☷"    // Vertical lines (landscape mode)
+        ScreenOrientation.ReversePortrait -> "⥯"  // Arrow down
+        ScreenOrientation.ReverseLandscape -> "⥮" // Arrow left
         ScreenOrientation.Sensor -> "◎"
     }
 }
