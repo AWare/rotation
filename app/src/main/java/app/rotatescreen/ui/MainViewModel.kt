@@ -96,20 +96,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private fun loadInstalledApps() {
         viewModelScope.launch(Dispatchers.IO) {
             val packageManager = context.packageManager
-            val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
 
             // Get recently used apps
             val recentApps = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1) {
-                val usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE) as? android.app.usage.UsageStatsManager
-                val endTime = System.currentTimeMillis()
-                val startTime = endTime - 1000 * 60 * 60 * 24 * 7 // Last 7 days
-
                 try {
-                    usageStatsManager?.queryUsageStats(
-                        android.app.usage.UsageStatsManager.INTERVAL_WEEKLY,
-                        startTime,
-                        endTime
-                    )?.mapNotNull { it.packageName }?.toSet() ?: emptySet()
+                    val service = context.getSystemService(Context.USAGE_STATS_SERVICE)
+                    if (service is android.app.usage.UsageStatsManager) {
+                        val endTime = System.currentTimeMillis()
+                        val startTime = endTime - 1000 * 60 * 60 * 24 * 7 // Last 7 days
+
+                        service.queryUsageStats(
+                            android.app.usage.UsageStatsManager.INTERVAL_WEEKLY,
+                            startTime,
+                            endTime
+                        )?.mapNotNull { it.packageName }?.toSet() ?: emptySet()
+                    } else {
+                        emptySet()
+                    }
                 } catch (e: Exception) {
                     emptySet()
                 }
@@ -117,21 +120,31 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 emptySet()
             }
 
-            // Get all user apps and prioritize recent ones, excluding this app
-            val allApps = packageManager.getInstalledApplications(PackageManager.GET_META_DATA)
-                .filter { it.flags and ApplicationInfo.FLAG_SYSTEM == 0 }
-                .filter { it.packageName != context.packageName } // Exclude this app
-                .mapNotNull { appInfo ->
+            // Get all launchable apps (apps with LAUNCHER intent)
+            val intent = Intent(Intent.ACTION_MAIN, null).apply {
+                addCategory(Intent.CATEGORY_LAUNCHER)
+            }
+
+            val allApps = packageManager.queryIntentActivities(intent, 0)
+                .mapNotNull { resolveInfo ->
                     try {
+                        val packageName = resolveInfo.activityInfo.packageName
+                        // Exclude this app
+                        if (packageName == context.packageName) {
+                            return@mapNotNull null
+                        }
+
+                        val appInfo = packageManager.getApplicationInfo(packageName, 0)
                         InstalledApp(
-                            packageName = appInfo.packageName,
+                            packageName = packageName,
                             appName = appInfo.loadLabel(packageManager).toString(),
-                            isRecent = recentApps.contains(appInfo.packageName)
+                            isRecent = recentApps.contains(packageName)
                         )
                     } catch (e: Exception) {
                         null
                     }
                 }
+                .distinctBy { it.packageName } // Remove duplicates
                 .sortedWith(compareByDescending<InstalledApp> { it.isRecent }.thenBy { it.appName })
 
             _installedApps.value = allApps
