@@ -36,7 +36,8 @@ class OrientationControlService : Service() {
     private val displayManager by lazy { getSystemService(DisplayManager::class.java) }
     private val windowManager by lazy { getSystemService(WINDOW_SERVICE) as WindowManager }
 
-    private var overlayView: View? = null
+    // Store overlay views per display ID
+    private val overlayViews = mutableMapOf<Int, View>()
     private var currentOrientation: ScreenOrientation = ScreenOrientation.Unspecified
 
     companion object {
@@ -113,14 +114,29 @@ class OrientationControlService : Service() {
         PermissionChecker.checkDrawOverlayPermission(this@OrientationControlService).bind()
 
         when (targetScreen) {
-            is TargetScreen.AllScreens -> setOrientationWithOverlay(orientation)
-            is TargetScreen.SpecificScreen -> setOrientationWithOverlay(orientation)
+            is TargetScreen.AllScreens -> {
+                // Apply to all displays
+                Log.d(TAG, "Applying orientation to all screens")
+                val displays = displayManager.displays
+                displays.forEach { display ->
+                    setOrientationWithOverlay(orientation, display.displayId).bind()
+                }
+                Either.Right(Unit)
+            }
+            is TargetScreen.SpecificScreen -> {
+                // Apply to specific display
+                Log.d(TAG, "Applying orientation to display ${targetScreen.id}")
+                setOrientationWithOverlay(orientation, targetScreen.id)
+            }
         }.bind()
     }
 
-    private fun setOrientationWithOverlay(orientation: ScreenOrientation): Either<OrientationError, Unit> =
+    private fun setOrientationWithOverlay(
+        orientation: ScreenOrientation,
+        displayId: Int
+    ): Either<OrientationError, Unit> =
         Either.catch {
-            Log.d(TAG, "setOrientationWithOverlay: ${orientation.displayName}")
+            Log.d(TAG, "setOrientationWithOverlay: ${orientation.displayName} on display $displayId")
 
             // Check permission first
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
@@ -128,32 +144,49 @@ class OrientationControlService : Service() {
                 throw SecurityException("SYSTEM_ALERT_WINDOW permission required")
             }
 
-            // Remove existing overlay if present
-            removeOverlay()
+            // Remove existing overlay for this display if present
+            removeOverlay(displayId)
 
             // For Unspecified/Sensor, we remove the overlay and let the system handle rotation
             if (orientation == ScreenOrientation.Unspecified || orientation == ScreenOrientation.Sensor) {
-                Log.d(TAG, "Removing overlay for sensor-based orientation")
+                Log.d(TAG, "Removing overlay for sensor-based orientation on display $displayId")
                 currentOrientation = orientation
                 return@catch
             }
 
             // Create and add new overlay with the desired orientation
             currentOrientation = orientation
-            createAndShowOverlay(orientation)
+            createAndShowOverlay(orientation, displayId)
 
-            Log.i(TAG, "Successfully set orientation using overlay")
+            Log.i(TAG, "Successfully set orientation using overlay on display $displayId")
         }.mapLeft { e ->
             Log.e(TAG, "Exception in setOrientationWithOverlay", e)
             OrientationError.DatabaseError("Failed to set orientation: ${e.message}")
         }
 
-    private fun createAndShowOverlay(orientation: ScreenOrientation) {
-        Log.d(TAG, "createAndShowOverlay: ${orientation.displayName}")
+    private fun createAndShowOverlay(orientation: ScreenOrientation, displayId: Int) {
+        Log.d(TAG, "createAndShowOverlay: ${orientation.displayName} on display $displayId")
+
+        // Get the display-specific context and window manager
+        val display = displayManager.displays.find { it.displayId == displayId }
+        if (display == null) {
+            Log.e(TAG, "Display $displayId not found")
+            return
+        }
+
+        // Create a display-specific context
+        val displayContext = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1) {
+            createDisplayContext(display)
+        } else {
+            this
+        }
+
+        // Get WindowManager for this specific display
+        val displayWindowManager = displayContext.getSystemService(WINDOW_SERVICE) as WindowManager
 
         // Create a minimal invisible view
-        val view = View(this)
-        overlayView = view
+        val view = View(displayContext)
+        overlayViews[displayId] = view
 
         // Configure window layout parameters
         val layoutParams = WindowManager.LayoutParams(
@@ -186,27 +219,45 @@ class OrientationControlService : Service() {
         layoutParams.x = 0
         layoutParams.y = 0
 
-        // Add the overlay to the window
+        // Add the overlay to the window on the specific display
         try {
-            windowManager.addView(view, layoutParams)
-            Log.d(TAG, "Overlay view added successfully")
+            displayWindowManager.addView(view, layoutParams)
+            Log.d(TAG, "Overlay view added successfully on display $displayId")
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to add overlay view", e)
-            overlayView = null
+            Log.e(TAG, "Failed to add overlay view on display $displayId", e)
+            overlayViews.remove(displayId)
             throw e
         }
     }
 
-    private fun removeOverlay() {
-        overlayView?.let { view ->
+    private fun removeOverlay(displayId: Int) {
+        overlayViews[displayId]?.let { view ->
             try {
-                Log.d(TAG, "Removing overlay view")
-                windowManager.removeView(view)
-                overlayView = null
+                Log.d(TAG, "Removing overlay view from display $displayId")
+
+                // Get the display-specific context to get its WindowManager
+                val display = displayManager.displays.find { it.displayId == displayId }
+                val displayContext = if (display != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1) {
+                    createDisplayContext(display)
+                } else {
+                    this
+                }
+                val displayWindowManager = displayContext.getSystemService(WINDOW_SERVICE) as WindowManager
+
+                displayWindowManager.removeView(view)
+                overlayViews.remove(displayId)
             } catch (e: Exception) {
-                Log.e(TAG, "Failed to remove overlay view", e)
-                overlayView = null
+                Log.e(TAG, "Failed to remove overlay view from display $displayId", e)
+                overlayViews.remove(displayId)
             }
+        }
+    }
+
+    private fun removeAllOverlays() {
+        Log.d(TAG, "Removing all overlay views")
+        val displayIds = overlayViews.keys.toList() // Make a copy to avoid concurrent modification
+        displayIds.forEach { displayId ->
+            removeOverlay(displayId)
         }
     }
 
@@ -219,7 +270,7 @@ class OrientationControlService : Service() {
 
     override fun onDestroy() {
         Log.d(TAG, "onDestroy: Cleaning up")
-        removeOverlay()
+        removeAllOverlays()
         serviceScope.cancel()
         super.onDestroy()
     }
