@@ -10,10 +10,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import app.rotatescreen.ui.navigation.Screen
+import app.rotatescreen.ui.screen.AppConfigScreen
 import app.rotatescreen.ui.screen.MainScreen
 import app.rotatescreen.ui.screen.PerAppSettingsScreen
 import app.rotatescreen.ui.theme.RotationTheme
@@ -71,6 +74,23 @@ fun RotationNavHost(viewModel: MainViewModel) {
 
         composable(Screen.PerApp.route) {
             PerAppSettingsScreen(
+                viewModel = viewModel,
+                onBackClick = {
+                    navController.popBackStack()
+                },
+                onAppClick = { packageName ->
+                    navController.navigate(Screen.AppConfig.createRoute(packageName))
+                }
+            )
+        }
+
+        composable(
+            route = Screen.AppConfig.route,
+            arguments = listOf(navArgument("packageName") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val packageName = backStackEntry.arguments?.getString("packageName") ?: ""
+            AppConfigScreen(
+                packageName = packageName,
                 viewModel = viewModel,
                 onBackClick = {
                     navController.popBackStack()

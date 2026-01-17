@@ -1,0 +1,148 @@
+package app.rotatescreen.tile
+
+import android.app.ActivityManager
+import android.content.Intent
+import android.os.Build
+import android.service.quicksettings.Tile
+import android.service.quicksettings.TileService
+import app.rotatescreen.data.local.RotationDatabase
+import app.rotatescreen.data.preferences.PreferencesManager
+import app.rotatescreen.data.repository.OrientationRepository
+import app.rotatescreen.domain.model.AppOrientationSetting
+import app.rotatescreen.domain.model.ScreenOrientation
+import app.rotatescreen.domain.model.TargetScreen
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
+
+/**
+ * Quick Settings tile for current app orientation control
+ */
+class CurrentAppTileService : TileService() {
+
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private var repository: OrientationRepository? = null
+    private var currentAppPackage: String? = null
+
+    private val orientationCycle = listOf(
+        ScreenOrientation.Unspecified,
+        ScreenOrientation.Portrait,
+        ScreenOrientation.Landscape,
+        ScreenOrientation.Sensor
+    )
+
+    override fun onCreate() {
+        super.onCreate()
+        val database = RotationDatabase.getInstance(applicationContext)
+        val prefs = PreferencesManager(applicationContext)
+        repository = OrientationRepository(database.appOrientationDao(), prefs)
+    }
+
+    override fun onStartListening() {
+        super.onStartListening()
+        updateCurrentApp()
+    }
+
+    override fun onClick() {
+        super.onClick()
+
+        val packageName = currentAppPackage
+        if (packageName != null) {
+            serviceScope.launch {
+                // Get current setting
+                val currentSetting = repository?.getSetting(packageName)?.getOrNull()
+                val currentOrientation = currentSetting?.orientation ?: ScreenOrientation.Unspecified
+
+                // Find next orientation
+                val currentIndex = orientationCycle.indexOf(currentOrientation)
+                val nextIndex = (currentIndex + 1) % orientationCycle.size
+                val nextOrientation = orientationCycle[nextIndex]
+
+                // Get app name
+                val appName = try {
+                    packageManager.getApplicationInfo(packageName, 0)
+                        .loadLabel(packageManager).toString()
+                } catch (e: Exception) {
+                    packageName
+                }
+
+                // Save setting
+                val newSetting = AppOrientationSetting.create(
+                    packageName = packageName,
+                    appName = appName,
+                    orientation = nextOrientation,
+                    targetScreen = currentSetting?.targetScreen ?: TargetScreen.AllScreens
+                )
+                repository?.saveSetting(newSetting)
+
+                // Update tile
+                updateTileForApp(packageName, appName, nextOrientation)
+            }
+        } else {
+            qsTile?.apply {
+                state = Tile.STATE_INACTIVE
+                label = "No app detected"
+                updateTile()
+            }
+        }
+    }
+
+    private fun updateCurrentApp() {
+        val activityManager = getSystemService(ACTIVITY_SERVICE)
+        if (activityManager is ActivityManager) {
+            val packageName = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1) {
+                val usageService = getSystemService(USAGE_STATS_SERVICE)
+                if (usageService is android.app.usage.UsageStatsManager) {
+                    val endTime = System.currentTimeMillis()
+                    val startTime = endTime - 1000 * 10 // Last 10 seconds
+                    usageService.queryUsageStats(
+                        android.app.usage.UsageStatsManager.INTERVAL_DAILY,
+                        startTime,
+                        endTime
+                    )?.maxByOrNull { it.lastTimeUsed }?.packageName
+                } else null
+            } else null
+
+            if (packageName != null && packageName != this.packageName) {
+                currentAppPackage = packageName
+                serviceScope.launch {
+                    val currentSetting = repository?.getSetting(packageName)?.getOrNull()
+                    val appName = try {
+                        packageManager.getApplicationInfo(packageName, 0)
+                            .loadLabel(packageManager).toString()
+                    } catch (e: Exception) {
+                        packageName
+                    }
+                    updateTileForApp(
+                        packageName,
+                        appName,
+                        currentSetting?.orientation ?: ScreenOrientation.Unspecified
+                    )
+                }
+            } else {
+                qsTile?.apply {
+                    state = Tile.STATE_INACTIVE
+                    label = "Current App"
+                    contentDescription = "No foreground app detected"
+                    updateTile()
+                }
+            }
+        }
+    }
+
+    private fun updateTileForApp(packageName: String, appName: String, orientation: ScreenOrientation) {
+        qsTile?.apply {
+            state = Tile.STATE_ACTIVE
+            label = "$appName: ${orientation.displayName}"
+            contentDescription = "Current app: $appName, Orientation: ${orientation.displayName}"
+            updateTile()
+        }
+    }
+
+    override fun onDestroy() {
+        serviceScope.cancel()
+        super.onDestroy()
+    }
+}

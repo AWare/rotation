@@ -33,12 +33,34 @@
             </intent-filter>
         </activity>
 
-        <!-- Quick Settings Tile -->
+        <!-- Quick Settings Tiles -->
         <service
             android:name=".tile.OrientationTileService"
             android:exported="true"
             android:icon="@drawable/ic_screen_rotation"
             android:label="@string/tile_label"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
+        <service
+            android:name=".tile.GlobalOrientationTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_screen_rotation"
+            android:label="Global Rotation"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
+        <service
+            android:name=".tile.CurrentAppTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_screen_rotation"
+            android:label="Current App Rotation"
             android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
             <intent-filter>
                 <action android:name="android.service.quicksettings.action.QS_TILE" />
