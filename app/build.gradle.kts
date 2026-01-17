@@ -5,11 +5,11 @@ plugins {
 }
 
 android {
-    namespace = "com.aware.rotation"
+    namespace = "app.rotatescreen"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.aware.rotation"
+        applicationId = "app.rotatescreen"
         minSdk = 29
         targetSdk = 34
         versionCode = 1
