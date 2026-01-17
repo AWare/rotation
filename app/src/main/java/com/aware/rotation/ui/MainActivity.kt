@@ -7,12 +7,18 @@ import androidx.activity.viewModels
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
+import com.aware.rotation.ui.navigation.Screen
 import com.aware.rotation.ui.screen.MainScreen
+import com.aware.rotation.ui.screen.PerAppSettingsScreen
 import com.aware.rotation.ui.theme.RotationTheme
 
 /**
- * Main activity using Jetpack Compose
+ * Main activity using Jetpack Compose with navigation
  */
 class MainActivity : ComponentActivity() {
 
@@ -26,7 +32,7 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    MainScreen(viewModel)
+                    RotationNavHost(viewModel)
                 }
             }
         }
@@ -36,5 +42,33 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         // Check permissions when returning to the app
         viewModel.checkPermissions()
+    }
+}
+
+@Composable
+fun RotationNavHost(viewModel: MainViewModel) {
+    val navController = rememberNavController()
+
+    NavHost(
+        navController = navController,
+        startDestination = Screen.Global.route
+    ) {
+        composable(Screen.Global.route) {
+            MainScreen(
+                viewModel = viewModel,
+                onNavigateToPerApp = {
+                    navController.navigate(Screen.PerApp.route)
+                }
+            )
+        }
+
+        composable(Screen.PerApp.route) {
+            PerAppSettingsScreen(
+                viewModel = viewModel,
+                onBackClick = {
+                    navController.popBackStack()
+                }
+            )
+        }
     }
 }
