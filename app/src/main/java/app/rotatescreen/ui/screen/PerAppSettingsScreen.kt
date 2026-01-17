@@ -111,13 +111,17 @@ fun PerAppSettingsScreen(
         if (debugInfo.isNotEmpty()) {
             RiscOsWindow(
                 title = "🔍 DEBUG INFO (Screenshot This!)",
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 200.dp) // Limit height so app list is visible
             ) {
                 Text(
                     text = debugInfo,
                     fontFamily = FontFamily.Monospace,
                     fontSize = MaterialTheme.typography.bodySmall.fontSize,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
                 )
             }
         }
