@@ -22,18 +22,18 @@ import androidx.compose.ui.unit.dp
  */
 object RiscOsColors {
     // NGE Purple shades
-    val lightGray = Color(0xFF6B4C7A)
-    val mediumGray = Color(0xFF1A0A2E)
-    val darkGray = Color(0xFF3F2E4D)
-    val veryDarkGray = Color(0xFF0F0520)
-    val white = Color(0xFFF0E5FF)
+    val lightGray = Color(0xFF2A1B3D)    // Darker for better contrast
+    val mediumGray = Color(0xFF0D0415)   // Very dark background
+    val darkGray = Color(0xFF1F1029)
+    val veryDarkGray = Color(0xFF000000)
+    val white = Color(0xFFFFFFFF)        // Pure white for maximum contrast
     val black = Color(0xFF000000)
 
-    // NGE signature colors
-    val actionBlue = Color(0xFF9D4EDD)  // NGE purple
+    // NGE signature colors - brightened for better visibility
+    val actionBlue = Color(0xFFB565FF)   // Brighter NGE purple
     val actionGreen = Color(0xFF00FF41)  // Terminal green
-    val actionRed = Color(0xFFFF0055)    // Warning red
-    val actionYellow = Color(0xFFFF6B00) // NGE orange
+    val actionRed = Color(0xFFFF1166)    // Warning red
+    val actionYellow = Color(0xFFFF8C00) // Brighter NGE orange
 }
 
 /**
@@ -135,14 +135,15 @@ fun RiscOsLabel(
     text: String,
     modifier: Modifier = Modifier,
     fontWeight: FontWeight = FontWeight.Normal,
-    maxLines: Int = 1
+    maxLines: Int = 1,
+    color: Color = RiscOsColors.black
 ) {
     Text(
         text = text,
         modifier = modifier,
         fontFamily = FontFamily.Monospace,
         fontWeight = fontWeight,
-        color = RiscOsColors.black,
+        color = color,
         style = MaterialTheme.typography.bodySmall,
         maxLines = maxLines,
         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis

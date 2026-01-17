@@ -35,9 +35,12 @@ fun PerAppSettingsScreen(
     var selectedAppForConfig by remember { mutableStateOf<String?>(null) }
     val focusRequester = remember { FocusRequester() }
 
-    // Request focus on the search field when screen is shown
-    LaunchedEffect(Unit) {
-        focusRequester.requestFocus()
+    // Request focus on the search field when accessibility service is enabled
+    LaunchedEffect(state.isAccessibilityServiceEnabled) {
+        if (state.isAccessibilityServiceEnabled) {
+            kotlinx.coroutines.delay(100) // Small delay to ensure TextField is laid out
+            focusRequester.requestFocus()
+        }
     }
 
     Column(

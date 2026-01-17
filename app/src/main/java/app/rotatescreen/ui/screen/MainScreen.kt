@@ -139,34 +139,5 @@ fun MainScreen(
                 }
             }
         }
-
-        // Info panel
-        RiscOsWindow(
-            title = "About",
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f)
-        ) {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                RiscOsLabel(
-                    text = "This app controls screen orientation using an overlay method.",
-                    maxLines = 3
-                )
-                RiscOsLabel(
-                    text = "• Global: affects all apps",
-                    maxLines = 2
-                )
-                RiscOsLabel(
-                    text = "• Per-App: automatic per app",
-                    maxLines = 2
-                )
-                RiscOsLabel(
-                    text = "• Multi-screen: target specific displays",
-                    maxLines = 2
-                )
-            }
-        }
     }
 }
