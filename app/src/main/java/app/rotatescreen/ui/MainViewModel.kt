@@ -129,18 +129,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 addCategory(Intent.CATEGORY_LAUNCHER)
             }
 
-            val queryFlags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                PackageManager.ResolveInfoFlags.of(PackageManager.MATCH_ALL.toLong())
-            } else {
-                PackageManager.MATCH_ALL
-            }
-
-            val installedAppsWithLauncher = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                packageManager.queryIntentActivities(launcherIntent, queryFlags)
+            val resolveInfos = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                packageManager.queryIntentActivities(
+                    launcherIntent,
+                    PackageManager.ResolveInfoFlags.of(PackageManager.MATCH_ALL.toLong())
+                )
             } else {
                 @Suppress("DEPRECATION")
-                packageManager.queryIntentActivities(launcherIntent, queryFlags)
-            }.mapNotNull { resolveInfo ->
+                packageManager.queryIntentActivities(launcherIntent, PackageManager.MATCH_ALL)
+            }
+
+            val installedAppsWithLauncher = resolveInfos.mapNotNull { resolveInfo ->
                 try {
                     val packageName = resolveInfo.activityInfo.packageName
 
