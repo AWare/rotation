@@ -5,8 +5,10 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
+import android.hardware.display.DisplayManager
 import android.net.Uri
 import android.provider.Settings
+import android.view.Display
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import arrow.core.Either
@@ -29,6 +31,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val context: Context = application.applicationContext
     private val repository: OrientationRepository
     private val preferencesManager: PreferencesManager
+    private val displayManager: DisplayManager = context.getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
 
     private val _state = MutableStateFlow(OrientationState())
     val state: StateFlow<OrientationState> = _state.asStateFlow()
@@ -38,6 +41,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
+
+    private val _availableScreens = MutableStateFlow<List<TargetScreen>>(listOf(TargetScreen.AllScreens))
+    val availableScreens: StateFlow<List<TargetScreen>> = _availableScreens.asStateFlow()
+
+    private val _selectedGlobalScreen = MutableStateFlow<TargetScreen>(TargetScreen.AllScreens)
+    val selectedGlobalScreen: StateFlow<TargetScreen> = _selectedGlobalScreen.asStateFlow()
+
+    private val _selectedAppScreens = MutableStateFlow<Map<String, TargetScreen>>(emptyMap())
 
     val filteredApps: StateFlow<List<InstalledApp>> = combine(
         installedApps,
@@ -54,6 +65,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         observeState()
         loadInstalledApps()
+        loadAvailableDisplays()
         checkPermissions()
     }
 
@@ -90,6 +102,25 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    private fun loadAvailableDisplays() {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val displays = displayManager.displays
+                val screens = mutableListOf<TargetScreen>(TargetScreen.AllScreens)
+
+                displays.forEachIndexed { index, display ->
+                    val screenName = if (index == 0) "Primary" else "Display $index"
+                    screens.add(TargetScreen.SpecificScreen(display.displayId, screenName))
+                }
+
+                _availableScreens.value = screens
+            } catch (e: Exception) {
+                // If we can't get displays, just use AllScreens
+                _availableScreens.value = listOf(TargetScreen.AllScreens)
+            }
+        }
+    }
+
     fun checkPermissions() {
         viewModelScope.launch {
             val hasDrawOverlay = PermissionChecker.hasDrawOverlayPermission(context)
@@ -107,8 +138,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setGlobalOrientation(orientation: ScreenOrientation) {
         viewModelScope.launch {
             preferencesManager.setGlobalOrientation(orientation)
-            applyOrientation(orientation, TargetScreen.AllScreens)
+            applyOrientation(orientation, _selectedGlobalScreen.value)
         }
+    }
+
+    fun setGlobalTargetScreen(screen: TargetScreen) {
+        _selectedGlobalScreen.value = screen
+    }
+
+    fun getSelectedScreenForApp(packageName: String): TargetScreen {
+        return _selectedAppScreens.value[packageName] ?: TargetScreen.AllScreens
+    }
+
+    fun setAppTargetScreen(packageName: String, screen: TargetScreen) {
+        _selectedAppScreens.update { it + (packageName to screen) }
     }
 
     fun setAppOrientation(
@@ -117,10 +160,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         orientation: ScreenOrientation
     ) {
         viewModelScope.launch {
+            val targetScreen = getSelectedScreenForApp(packageName)
             val setting = AppOrientationSetting.create(
                 packageName = packageName,
                 appName = appName,
-                orientation = orientation
+                orientation = orientation,
+                targetScreen = targetScreen
             )
             repository.saveSetting(setting)
         }
