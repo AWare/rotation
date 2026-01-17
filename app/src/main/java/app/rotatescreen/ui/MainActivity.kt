@@ -31,8 +31,13 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Get package name from intent if launched from tile
+        // Get package name from intent if launched from tile, with validation
         val targetPackage = intent?.getStringExtra(EXTRA_TARGET_PACKAGE)
+            ?.takeIf { pkg ->
+                pkg.isNotBlank() &&
+                pkg.length <= 255 &&
+                pkg.matches(Regex("^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)*$"))
+            }
 
         setContent {
             RotationTheme {

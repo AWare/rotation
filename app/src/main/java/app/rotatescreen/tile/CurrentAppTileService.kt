@@ -23,7 +23,7 @@ import kotlinx.coroutines.launch
  */
 class CurrentAppTileService : TileService() {
 
-    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private var serviceScope: CoroutineScope? = null
     private var repository: OrientationRepository? = null
     private var currentAppPackage: String? = null
 
@@ -36,6 +36,7 @@ class CurrentAppTileService : TileService() {
 
     override fun onCreate() {
         super.onCreate()
+        serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
         val database = RotationDatabase.getInstance(applicationContext)
         repository = OrientationRepository(database.appOrientationDao())
     }
@@ -50,7 +51,7 @@ class CurrentAppTileService : TileService() {
 
         val packageName = currentAppPackage
         if (packageName != null) {
-            serviceScope.launch {
+            serviceScope?.launch {
                 // Get current setting
                 val currentSetting = repository?.getSetting(packageName)?.getOrNull()
                 val currentOrientation = currentSetting?.orientation ?: ScreenOrientation.Unspecified
@@ -107,7 +108,7 @@ class CurrentAppTileService : TileService() {
 
             if (packageName != null && packageName != this.packageName) {
                 currentAppPackage = packageName
-                serviceScope.launch {
+                serviceScope?.launch {
                     val currentSetting = repository?.getSetting(packageName)?.getOrNull()
                     val appName = try {
                         packageManager.getApplicationInfo(packageName, 0)
@@ -158,7 +159,9 @@ class CurrentAppTileService : TileService() {
     }
 
     override fun onDestroy() {
-        serviceScope.cancel()
+        serviceScope?.cancel()
+        serviceScope = null
+        repository = null
         super.onDestroy()
     }
 }

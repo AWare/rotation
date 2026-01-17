@@ -33,7 +33,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val context: Context = application.applicationContext
     private val repository: OrientationRepository
     private val preferencesManager: PreferencesManager
-    private val displayManager: DisplayManager = context.getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
+    private val displayManager: DisplayManager by lazy {
+        val service = context.getSystemService(Context.DISPLAY_SERVICE)
+        if (service is DisplayManager) service
+        else throw IllegalStateException("DisplayManager not available")
+    }
 
     private val _state = MutableStateFlow(OrientationState())
     val state: StateFlow<OrientationState> = _state.asStateFlow()
@@ -120,39 +124,32 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 emptySet()
             }
 
-            // Get all installed packages
-            val packages = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                packageManager.getInstalledPackages(PackageManager.PackageInfoFlags.of(0))
-            } else {
-                @Suppress("DEPRECATION")
-                packageManager.getInstalledPackages(0)
-            }
-
-            // Create launcher intent to check which apps are launchable
+            // Query all apps with launcher activities directly
             val launcherIntent = Intent(Intent.ACTION_MAIN, null).apply {
                 addCategory(Intent.CATEGORY_LAUNCHER)
             }
 
-            val installedAppsWithLauncher = packages.mapNotNull { packageInfo ->
+            val queryFlags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                PackageManager.ResolveInfoFlags.of(PackageManager.MATCH_ALL.toLong())
+            } else {
+                PackageManager.MATCH_ALL
+            }
+
+            val installedAppsWithLauncher = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                packageManager.queryIntentActivities(launcherIntent, queryFlags)
+            } else {
+                @Suppress("DEPRECATION")
+                packageManager.queryIntentActivities(launcherIntent, queryFlags)
+            }.mapNotNull { resolveInfo ->
                 try {
-                    val packageName = packageInfo.packageName
+                    val packageName = resolveInfo.activityInfo.packageName
 
                     // Exclude this app
                     if (packageName == context.packageName) {
                         return@mapNotNull null
                     }
 
-                    // Check if package has launcher activity
-                    val intent = Intent(launcherIntent).apply {
-                        `package` = packageName
-                    }
-                    val hasLauncherActivity = packageManager.queryIntentActivities(intent, 0).isNotEmpty()
-
-                    if (!hasLauncherActivity) {
-                        return@mapNotNull null
-                    }
-
-                    val appInfo = packageInfo.applicationInfo
+                    val appInfo = packageManager.getApplicationInfo(packageName, 0)
                     InstalledApp(
                         packageName = packageName,
                         appName = appInfo.loadLabel(packageManager).toString(),
@@ -162,10 +159,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 } catch (e: Exception) {
                     null
                 }
-            }
+            }.distinctBy { it.packageName }
 
             // Get all saved settings to include apps that may not have launcher activities
-            val savedSettings = repository.getAllSettings().first()
+            val savedSettings = repository.getAllSettings().firstOrNull() ?: emptyList()
             val savedAppPackages = installedAppsWithLauncher.map { it.packageName }.toSet()
 
             val appsFromSettings = savedSettings.mapNotNull { setting ->
@@ -275,12 +272,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 targetScreen = targetScreen
             )
             repository.saveSetting(setting)
+            // Refresh app list to show updated visual state
+            loadInstalledApps()
         }
     }
 
     fun removeAppSetting(packageName: String) {
         viewModelScope.launch {
             repository.deleteSetting(packageName)
+            // Refresh app list to remove visual indicators
+            loadInstalledApps()
         }
     }
 
@@ -336,19 +337,27 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun applyOrientation(orientation: ScreenOrientation, targetScreen: TargetScreen) {
-        val intent = Intent(context, OrientationControlService::class.java).apply {
-            action = OrientationControlService.ACTION_SET_ORIENTATION
-            putExtra(OrientationControlService.EXTRA_ORIENTATION, orientation.value)
-            putExtra(OrientationControlService.EXTRA_SCREEN_ID, targetScreen.id)
+        try {
+            val intent = Intent(context, OrientationControlService::class.java).apply {
+                action = OrientationControlService.ACTION_SET_ORIENTATION
+                putExtra(OrientationControlService.EXTRA_ORIENTATION, orientation.value)
+                putExtra(OrientationControlService.EXTRA_SCREEN_ID, targetScreen.id)
+            }
+            context.startService(intent)
+        } catch (e: Exception) {
+            android.util.Log.e("MainViewModel", "Failed to apply orientation", e)
         }
-        context.startService(intent)
     }
 
     fun flashScreen(targetScreen: TargetScreen) {
-        val intent = Intent(context, OrientationControlService::class.java).apply {
-            action = "com.aware.rotation.action.FLASH_SCREEN"
-            putExtra(OrientationControlService.EXTRA_SCREEN_ID, targetScreen.id)
+        try {
+            val intent = Intent(context, OrientationControlService::class.java).apply {
+                action = "com.aware.rotation.action.FLASH_SCREEN"
+                putExtra(OrientationControlService.EXTRA_SCREEN_ID, targetScreen.id)
+            }
+            context.startService(intent)
+        } catch (e: Exception) {
+            android.util.Log.e("MainViewModel", "Failed to flash screen", e)
         }
-        context.startService(intent)
     }
 }
