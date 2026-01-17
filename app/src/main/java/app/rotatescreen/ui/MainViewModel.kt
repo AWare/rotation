@@ -120,32 +120,50 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 emptySet()
             }
 
-            // Get all launchable apps (apps with LAUNCHER intent)
-            val intent = Intent(Intent.ACTION_MAIN, null).apply {
+            // Get all installed packages
+            val packages = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                packageManager.getInstalledPackages(PackageManager.PackageInfoFlags.of(0))
+            } else {
+                @Suppress("DEPRECATION")
+                packageManager.getInstalledPackages(0)
+            }
+
+            // Create launcher intent to check which apps are launchable
+            val launcherIntent = Intent(Intent.ACTION_MAIN, null).apply {
                 addCategory(Intent.CATEGORY_LAUNCHER)
             }
 
-            val allApps = packageManager.queryIntentActivities(intent, 0)
-                .mapNotNull { resolveInfo ->
-                    try {
-                        val packageName = resolveInfo.activityInfo.packageName
-                        // Exclude this app
-                        if (packageName == context.packageName) {
-                            return@mapNotNull null
-                        }
+            val allApps = packages.mapNotNull { packageInfo ->
+                try {
+                    val packageName = packageInfo.packageName
 
-                        val appInfo = packageManager.getApplicationInfo(packageName, 0)
-                        InstalledApp(
-                            packageName = packageName,
-                            appName = appInfo.loadLabel(packageManager).toString(),
-                            isRecent = recentApps.contains(packageName)
-                        )
-                    } catch (e: Exception) {
-                        null
+                    // Exclude this app
+                    if (packageName == context.packageName) {
+                        return@mapNotNull null
                     }
+
+                    // Check if package has launcher activity
+                    val intent = Intent(launcherIntent).apply {
+                        `package` = packageName
+                    }
+                    val hasLauncherActivity = packageManager.queryIntentActivities(intent, 0).isNotEmpty()
+
+                    if (!hasLauncherActivity) {
+                        return@mapNotNull null
+                    }
+
+                    val appInfo = packageInfo.applicationInfo
+                    InstalledApp(
+                        packageName = packageName,
+                        appName = appInfo.loadLabel(packageManager).toString(),
+                        isRecent = recentApps.contains(packageName)
+                    )
+                } catch (e: Exception) {
+                    null
                 }
-                .distinctBy { it.packageName } // Remove duplicates
-                .sortedWith(compareByDescending<InstalledApp> { it.isRecent }.thenBy { it.appName })
+            }
+            .distinctBy { it.packageName } // Remove duplicates
+            .sortedWith(compareByDescending<InstalledApp> { it.isRecent }.thenBy { it.appName })
 
             _installedApps.value = allApps
         }
@@ -269,15 +287,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP_MR1) {
             return false
         }
-        val usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE) as? android.app.usage.UsageStatsManager
-        val endTime = System.currentTimeMillis()
-        val startTime = endTime - 1000 * 60
-        val stats = usageStatsManager?.queryUsageStats(
-            android.app.usage.UsageStatsManager.INTERVAL_DAILY,
-            startTime,
-            endTime
-        )
-        return stats != null && stats.isNotEmpty()
+        val service = context.getSystemService(Context.USAGE_STATS_SERVICE)
+        if (service is android.app.usage.UsageStatsManager) {
+            val endTime = System.currentTimeMillis()
+            val startTime = endTime - 1000 * 60
+            val stats = service.queryUsageStats(
+                android.app.usage.UsageStatsManager.INTERVAL_DAILY,
+                startTime,
+                endTime
+            )
+            return stats != null && stats.isNotEmpty()
+        }
+        return false
     }
 
     fun requestUsageStatsPermission() {
