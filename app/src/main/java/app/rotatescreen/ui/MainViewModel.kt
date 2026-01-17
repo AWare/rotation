@@ -144,7 +144,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val screens = mutableListOf<TargetScreen>(TargetScreen.AllScreens)
 
                 displays.forEachIndexed { index, display ->
-                    val screenName = if (index == 0) "Primary" else "Display $index"
+                    val screenName = if (index == 0) "Primary" else "Auxiliary"
 
                     // Calculate aspect ratio
                     val metrics = android.util.DisplayMetrics()

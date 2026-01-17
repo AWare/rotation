@@ -1,5 +1,7 @@
 package app.rotatescreen.ui.screen
 
+import android.graphics.drawable.Drawable
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -8,11 +10,12 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.core.graphics.drawable.toBitmap
 import app.rotatescreen.domain.model.ScreenOrientation
 import app.rotatescreen.domain.model.TargetScreen
 import app.rotatescreen.ui.MainViewModel
@@ -29,18 +32,14 @@ fun PerAppSettingsScreen(
 ) {
     val state by viewModel.state.collectAsState()
     val filteredApps by viewModel.filteredApps.collectAsState()
-    val searchQuery by viewModel.searchQuery.collectAsState()
     val availableScreens by viewModel.availableScreens.collectAsState()
+    val context = LocalContext.current
 
     var selectedAppForConfig by remember { mutableStateOf<String?>(null) }
-    val focusRequester = remember { FocusRequester() }
 
-    // Request focus on the search field when accessibility service is enabled
-    LaunchedEffect(state.isAccessibilityServiceEnabled) {
-        if (state.isAccessibilityServiceEnabled) {
-            kotlinx.coroutines.delay(100) // Small delay to ensure TextField is laid out
-            focusRequester.requestFocus()
-        }
+    // Get top 5 recent apps
+    val topRecentApps = remember(filteredApps) {
+        filteredApps.filter { it.isRecent }.take(5)
     }
 
     Column(
@@ -96,10 +95,8 @@ fun PerAppSettingsScreen(
         if (state.isAccessibilityServiceEnabled) {
             // App picker and configuration
             RiscOsWindow(
-                title = "Select App",
-                modifier = Modifier
-                    .fillMaxSize()
-                    .imePadding()
+                title = "Recent Apps",
+                modifier = Modifier.fillMaxSize()
             ) {
                 Column(
                     modifier = Modifier
@@ -107,28 +104,92 @@ fun PerAppSettingsScreen(
                         .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    // Search field
-                    RiscOsPanel(
-                        inset = true,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        OutlinedTextField(
-                            value = searchQuery,
-                            onValueChange = { viewModel.updateSearchQuery(it) },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .focusRequester(focusRequester),
-                            placeholder = {
-                                Text(
-                                    "Search apps...",
-                                    fontFamily = FontFamily.Monospace
-                                )
-                            },
-                            singleLine = true,
-                            textStyle = LocalTextStyle.current.copy(
-                                fontFamily = FontFamily.Monospace
+                    // Top 5 recent apps with icons
+                    if (topRecentApps.isNotEmpty()) {
+                        RiscOsPanel(
+                            inset = true,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                topRecentApps.forEach { app ->
+                                    val currentSetting = state.perAppSettings[app.packageName]
+                                    val isSelected = selectedAppForConfig == app.packageName
+
+                                    RiscOsButton(
+                                        onClick = {
+                                            selectedAppForConfig = if (isSelected) null else app.packageName
+                                        },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        isSelected = isSelected,
+                                        backgroundColor = if (currentSetting != null)
+                                            RiscOsColors.actionGreen.copy(alpha = 0.15f)
+                                        else
+                                            RiscOsColors.white,
+                                        contentPadding = PaddingValues(12.dp)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            // App icon
+                                            val icon = remember(app.packageName) {
+                                                try {
+                                                    context.packageManager.getApplicationIcon(app.packageName)
+                                                } catch (e: Exception) {
+                                                    null
+                                                }
+                                            }
+                                            icon?.let { drawable ->
+                                                Image(
+                                                    bitmap = drawable.toBitmap(64, 64).asImageBitmap(),
+                                                    contentDescription = app.appName,
+                                                    modifier = Modifier.size(40.dp)
+                                                )
+                                            }
+
+                                            // App name and status
+                                            Column(
+                                                modifier = Modifier.weight(1f)
+                                            ) {
+                                                RiscOsLabel(
+                                                    text = app.appName,
+                                                    fontWeight = FontWeight.Bold,
+                                                    maxLines = 1
+                                                )
+                                                if (currentSetting != null) {
+                                                    RiscOsLabel(
+                                                        text = "${currentSetting.orientation.displayName} • ${currentSetting.targetScreen.displayName}",
+                                                        maxLines = 1
+                                                    )
+                                                }
+                                            }
+
+                                            // Indicator
+                                            if (isSelected) {
+                                                RiscOsLabel(
+                                                    text = "▼",
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = RiscOsColors.actionGreen
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        RiscOsPanel(
+                            inset = true,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            RiscOsLabel(
+                                text = "No recent apps found. Open some apps to configure them.",
+                                maxLines = 3
                             )
-                        )
+                        }
                     }
 
                     // Configuration panel (shows when app selected)
@@ -212,63 +273,6 @@ fun PerAppSettingsScreen(
                                                 text = "✕ Remove Setting",
                                                 fontWeight = FontWeight.Bold
                                             )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // App list
-                    RiscOsPanel(
-                        inset = true,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            filteredApps.forEach { app ->
-                                val currentSetting = state.perAppSettings[app.packageName]
-                                val isSelected = selectedAppForConfig == app.packageName
-
-                                RiscOsButton(
-                                    onClick = {
-                                        selectedAppForConfig = if (isSelected) null else app.packageName
-                                    },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    isSelected = isSelected,
-                                    backgroundColor = if (currentSetting != null)
-                                        RiscOsColors.actionGreen.copy(alpha = 0.15f)
-                                    else
-                                        RiscOsColors.white
-                                ) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        RiscOsLabel(
-                                            text = app.appName,
-                                            modifier = Modifier.weight(1f),
-                                            maxLines = 1
-                                        )
-                                        Column(
-                                            horizontalAlignment = Alignment.End
-                                        ) {
-                                            RiscOsLabel(
-                                                text = currentSetting?.orientation?.displayName ?: "Default",
-                                                fontWeight = if (currentSetting != null)
-                                                    FontWeight.Bold
-                                                else
-                                                    FontWeight.Normal,
-                                                maxLines = 1
-                                            )
-                                            if (currentSetting != null && currentSetting.targetScreen !is TargetScreen.AllScreens) {
-                                                RiscOsLabel(
-                                                    text = currentSetting.targetScreen.displayName,
-                                                    maxLines = 1
-                                                )
-                                            }
                                         }
                                     }
                                 }

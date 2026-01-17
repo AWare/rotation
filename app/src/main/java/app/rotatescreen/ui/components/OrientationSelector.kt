@@ -103,12 +103,14 @@ private fun OrientationButton(
             RiscOsLabel(
                 text = getOrientationSymbol(orientation),
                 fontWeight = FontWeight.Bold,
-                maxLines = 1
+                maxLines = 1,
+                color = RiscOsColors.white
             )
             Spacer(modifier = Modifier.height(2.dp))
             RiscOsLabel(
                 text = getShortName(orientation),
-                maxLines = 1
+                maxLines = 1,
+                color = RiscOsColors.white
             )
         }
     }

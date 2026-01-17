@@ -306,9 +306,10 @@ class OrientationControlService : Service() {
             // Get WindowManager for this specific display
             val displayWindowManager = displayContext.getSystemService(WINDOW_SERVICE) as WindowManager
 
-            // Create a white view that covers the entire screen
+            // Create a purple flash view with NGE theme
             val flashView = View(displayContext).apply {
-                setBackgroundColor(Color.WHITE)
+                setBackgroundColor(android.graphics.Color.parseColor("#B565FF"))
+                alpha = 0.7f  // Semi-transparent for better effect
             }
 
             // Configure window layout parameters for full-screen flash
