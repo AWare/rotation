@@ -20,7 +20,14 @@ object AccessibilityChecker {
                 context.contentResolver,
                 Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
             ) ?: ""
-            enabledServices.contains(serviceName)
+
+            // Check for multiple possible formats
+            // Format 1: com.aware.rotation/.service.ForegroundAppDetectorService
+            // Format 2: com.aware.rotation/com.aware.rotation.service.ForegroundAppDetectorService
+            val shortName = "com.aware.rotation/.service.ForegroundAppDetectorService"
+            val fullName = "com.aware.rotation/com.aware.rotation.service.ForegroundAppDetectorService"
+
+            enabledServices.contains(shortName) || enabledServices.contains(fullName)
         }.mapLeft {
             OrientationError.ServiceNotRunning(serviceName)
         }
