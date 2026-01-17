@@ -8,6 +8,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -31,6 +33,12 @@ fun PerAppSettingsScreen(
     val availableScreens by viewModel.availableScreens.collectAsState()
 
     var selectedAppForConfig by remember { mutableStateOf<String?>(null) }
+    val focusRequester = remember { FocusRequester() }
+
+    // Request focus on the search field when screen is shown
+    LaunchedEffect(Unit) {
+        focusRequester.requestFocus()
+    }
 
     Column(
         modifier = Modifier
@@ -100,7 +108,9 @@ fun PerAppSettingsScreen(
                         OutlinedTextField(
                             value = searchQuery,
                             onValueChange = { viewModel.updateSearchQuery(it) },
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .focusRequester(focusRequester),
                             placeholder = {
                                 Text(
                                     "Search apps...",
@@ -162,6 +172,9 @@ fun PerAppSettingsScreen(
                                         selectedScreen = currentTargetScreen,
                                         onScreenSelected = {
                                             viewModel.setAppTargetScreen(packageName, it)
+                                        },
+                                        onScreenFlash = { screen ->
+                                            viewModel.flashScreen(screen)
                                         }
                                     )
 

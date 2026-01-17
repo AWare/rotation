@@ -1,5 +1,6 @@
 package app.rotatescreen.ui
 
+import android.app.ActivityManager
 import android.app.Application
 import android.content.Context
 import android.content.Intent
@@ -7,6 +8,7 @@ import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.hardware.display.DisplayManager
 import android.net.Uri
+import android.os.Build
 import android.provider.Settings
 import android.view.Display
 import androidx.lifecycle.AndroidViewModel
@@ -94,17 +96,44 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private fun loadInstalledApps() {
         viewModelScope.launch(Dispatchers.IO) {
             val packageManager = context.packageManager
-            val apps = packageManager.getInstalledApplications(PackageManager.GET_META_DATA)
-                .filter { it.flags and ApplicationInfo.FLAG_SYSTEM == 0 } // Filter out system apps
-                .map { appInfo ->
-                    InstalledApp(
-                        packageName = appInfo.packageName,
-                        appName = appInfo.loadLabel(packageManager).toString()
-                    )
-                }
-                .sortedBy { it.appName }
+            val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
 
-            _installedApps.value = apps
+            // Get recently used apps
+            val recentApps = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1) {
+                val usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE) as? android.app.usage.UsageStatsManager
+                val endTime = System.currentTimeMillis()
+                val startTime = endTime - 1000 * 60 * 60 * 24 * 7 // Last 7 days
+
+                try {
+                    usageStatsManager?.queryUsageStats(
+                        android.app.usage.UsageStatsManager.INTERVAL_WEEKLY,
+                        startTime,
+                        endTime
+                    )?.mapNotNull { it.packageName }?.toSet() ?: emptySet()
+                } catch (e: Exception) {
+                    emptySet()
+                }
+            } else {
+                emptySet()
+            }
+
+            // Get all user apps and prioritize recent ones
+            val allApps = packageManager.getInstalledApplications(PackageManager.GET_META_DATA)
+                .filter { it.flags and ApplicationInfo.FLAG_SYSTEM == 0 }
+                .mapNotNull { appInfo ->
+                    try {
+                        InstalledApp(
+                            packageName = appInfo.packageName,
+                            appName = appInfo.loadLabel(packageManager).toString(),
+                            isRecent = recentApps.contains(appInfo.packageName)
+                        )
+                    } catch (e: Exception) {
+                        null
+                    }
+                }
+                .sortedWith(compareByDescending<InstalledApp> { it.isRecent }.thenBy { it.appName })
+
+            _installedApps.value = allApps
         }
     }
 
@@ -116,7 +145,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
                 displays.forEachIndexed { index, display ->
                     val screenName = if (index == 0) "Primary" else "Display $index"
-                    screens.add(TargetScreen.SpecificScreen(display.displayId, screenName))
+
+                    // Calculate aspect ratio
+                    val metrics = android.util.DisplayMetrics()
+                    display.getMetrics(metrics)
+                    val width = metrics.widthPixels
+                    val height = metrics.heightPixels
+
+                    val aspectRatio = when {
+                        height > width * 1.1 -> AspectRatio.PORTRAIT
+                        width > height * 1.1 -> AspectRatio.LANDSCAPE
+                        else -> AspectRatio.SQUARE
+                    }
+
+                    screens.add(TargetScreen.SpecificScreen(display.displayId, screenName, aspectRatio))
                 }
 
                 _availableScreens.value = screens
@@ -213,6 +255,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val intent = Intent(context, OrientationControlService::class.java).apply {
             action = OrientationControlService.ACTION_SET_ORIENTATION
             putExtra(OrientationControlService.EXTRA_ORIENTATION, orientation.value)
+            putExtra(OrientationControlService.EXTRA_SCREEN_ID, targetScreen.id)
+        }
+        context.startService(intent)
+    }
+
+    fun flashScreen(targetScreen: TargetScreen) {
+        val intent = Intent(context, OrientationControlService::class.java).apply {
+            action = "com.aware.rotation.action.FLASH_SCREEN"
             putExtra(OrientationControlService.EXTRA_SCREEN_ID, targetScreen.id)
         }
         context.startService(intent)

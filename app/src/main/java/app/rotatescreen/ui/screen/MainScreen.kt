@@ -80,7 +80,10 @@ fun MainScreen(
                 ScreenSelector(
                     availableScreens = availableScreens,
                     selectedScreen = selectedGlobalScreen,
-                    onScreenSelected = { viewModel.setGlobalTargetScreen(it) }
+                    onScreenSelected = { viewModel.setGlobalTargetScreen(it) },
+                    onScreenFlash = { screen ->
+                        viewModel.flashScreen(screen)
+                    }
                 )
 
                 // Show/hide orientation selector

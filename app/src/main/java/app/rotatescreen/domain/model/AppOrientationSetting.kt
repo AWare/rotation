@@ -37,5 +37,6 @@ data class AppOrientationSetting(
 data class InstalledApp(
     val packageName: String,
     val appName: String,
-    val iconPath: String? = null
+    val iconPath: String? = null,
+    val isRecent: Boolean = false
 )

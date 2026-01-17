@@ -6,6 +6,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import app.rotatescreen.domain.model.AspectRatio
 import app.rotatescreen.domain.model.TargetScreen
 
 /**
@@ -16,7 +17,8 @@ fun ScreenSelector(
     availableScreens: List<TargetScreen>,
     selectedScreen: TargetScreen,
     onScreenSelected: (TargetScreen) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onScreenFlash: ((TargetScreen) -> Unit)? = null
 ) {
     if (availableScreens.isEmpty() || availableScreens.size == 1) {
         return
@@ -38,6 +40,7 @@ fun ScreenSelector(
                     screen = screen,
                     isSelected = selectedScreen.id == screen.id,
                     onClick = { onScreenSelected(screen) },
+                    onFlash = onScreenFlash,
                     modifier = Modifier.weight(1f)
                 )
             }
@@ -50,10 +53,17 @@ private fun ScreenButton(
     screen: TargetScreen,
     isSelected: Boolean,
     onClick: () -> Unit,
+    onFlash: ((TargetScreen) -> Unit)?,
     modifier: Modifier = Modifier
 ) {
     RiscOsButton(
-        onClick = onClick,
+        onClick = {
+            onClick()
+            // Flash the screen when clicked
+            if (screen !is TargetScreen.AllScreens) {
+                onFlash?.invoke(screen)
+            }
+        },
         isSelected = isSelected,
         modifier = modifier.height(40.dp),
         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
@@ -67,14 +77,24 @@ private fun ScreenButton(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.fillMaxWidth()
         ) {
-            // Icon symbol
+            // Icon symbol - aspect ratio aware
+            val icon = when (screen) {
+                is TargetScreen.AllScreens -> "⊞"
+                is TargetScreen.SpecificScreen -> when (screen.ratio) {
+                    AspectRatio.PORTRAIT -> "▯"    // Tall rectangle
+                    AspectRatio.LANDSCAPE -> "▭"   // Wide rectangle
+                    AspectRatio.SQUARE -> "▢"      // Square
+                }
+            }
+
             RiscOsLabel(
-                text = if (screen is TargetScreen.AllScreens) "⊞" else "▢",
+                text = icon,
                 fontWeight = FontWeight.Bold
             )
             Spacer(modifier = Modifier.width(4.dp))
             RiscOsLabel(
-                text = screen.displayName
+                text = screen.displayName,
+                maxLines = 1
             )
         }
     }

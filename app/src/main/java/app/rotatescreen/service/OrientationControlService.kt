@@ -3,6 +3,7 @@ package app.rotatescreen.service
 import android.app.Service
 import android.content.Intent
 import android.content.pm.ActivityInfo
+import android.graphics.Color
 import android.graphics.PixelFormat
 import android.hardware.display.DisplayManager
 import android.os.Build
@@ -24,6 +25,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
@@ -43,6 +45,7 @@ class OrientationControlService : Service() {
     companion object {
         private const val TAG = "OrientationControl"
         const val ACTION_SET_ORIENTATION = "com.aware.rotation.action.SET_ORIENTATION"
+        const val ACTION_FLASH_SCREEN = "com.aware.rotation.action.FLASH_SCREEN"
         const val EXTRA_ORIENTATION = "orientation"
         const val EXTRA_SCREEN_ID = "screen_id"
     }
@@ -91,6 +94,14 @@ class OrientationControlService : Service() {
                         }
                     }
                 )
+            }
+            ACTION_FLASH_SCREEN -> {
+                val screenId = intent.getIntExtra(EXTRA_SCREEN_ID, -1)
+                Log.d(TAG, "FLASH_SCREEN: screenId=$screenId")
+
+                serviceScope.launch(Dispatchers.Main) {
+                    flashScreen(screenId)
+                }
             }
         }
     }
@@ -267,6 +278,77 @@ class OrientationControlService : Service() {
         }.mapLeft { e ->
             OrientationError.DatabaseError("Failed to get displays: ${e.message}")
         }
+
+    private suspend fun flashScreen(displayId: Int) {
+        Either.catch {
+            Log.d(TAG, "flashScreen: displayId=$displayId")
+
+            // Check permission first
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
+                Log.e(TAG, "SYSTEM_ALERT_WINDOW permission not granted!")
+                return
+            }
+
+            // Get the display
+            val display = displayManager.displays.find { it.displayId == displayId }
+            if (display == null) {
+                Log.e(TAG, "Display $displayId not found")
+                return
+            }
+
+            // Create a display-specific context
+            val displayContext = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1) {
+                createDisplayContext(display)
+            } else {
+                this
+            }
+
+            // Get WindowManager for this specific display
+            val displayWindowManager = displayContext.getSystemService(WINDOW_SERVICE) as WindowManager
+
+            // Create a white view that covers the entire screen
+            val flashView = View(displayContext).apply {
+                setBackgroundColor(Color.WHITE)
+            }
+
+            // Configure window layout parameters for full-screen flash
+            val layoutParams = WindowManager.LayoutParams(
+                WindowManager.LayoutParams.MATCH_PARENT,
+                WindowManager.LayoutParams.MATCH_PARENT,
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                } else {
+                    @Suppress("DEPRECATION")
+                    WindowManager.LayoutParams.TYPE_SYSTEM_OVERLAY
+                },
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                        WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                        WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                PixelFormat.TRANSLUCENT
+            )
+
+            layoutParams.gravity = Gravity.TOP or Gravity.START
+            layoutParams.x = 0
+            layoutParams.y = 0
+
+            // Add the flash overlay
+            try {
+                displayWindowManager.addView(flashView, layoutParams)
+                Log.d(TAG, "Flash overlay added on display $displayId")
+
+                // Wait for 300ms
+                delay(300)
+
+                // Remove the flash overlay
+                displayWindowManager.removeView(flashView)
+                Log.d(TAG, "Flash overlay removed from display $displayId")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to flash screen on display $displayId", e)
+            }
+        }.mapLeft { e ->
+            Log.e(TAG, "Exception in flashScreen", e)
+        }
+    }
 
     override fun onDestroy() {
         Log.d(TAG, "onDestroy: Cleaning up")
