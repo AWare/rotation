@@ -133,7 +133,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 addCategory(Intent.CATEGORY_LAUNCHER)
             }
 
-            val allApps = packages.mapNotNull { packageInfo ->
+            val installedAppsWithLauncher = packages.mapNotNull { packageInfo ->
                 try {
                     val packageName = packageInfo.packageName
 
@@ -156,14 +156,41 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     InstalledApp(
                         packageName = packageName,
                         appName = appInfo.loadLabel(packageManager).toString(),
-                        isRecent = recentApps.contains(packageName)
+                        isRecent = recentApps.contains(packageName),
+                        isInstalled = true
                     )
                 } catch (e: Exception) {
                     null
                 }
             }
-            .distinctBy { it.packageName } // Remove duplicates
-            .sortedWith(compareByDescending<InstalledApp> { it.isRecent }.thenBy { it.appName })
+
+            // Get all saved settings to include apps that may not have launcher activities
+            val savedSettings = repository.getAllSettings().first()
+            val savedAppPackages = installedAppsWithLauncher.map { it.packageName }.toSet()
+
+            val appsFromSettings = savedSettings.mapNotNull { setting ->
+                // Skip if already in the installed apps list
+                if (savedAppPackages.contains(setting.packageName)) {
+                    return@mapNotNull null
+                }
+
+                // Add apps with saved settings even if not installed/no launcher
+                InstalledApp(
+                    packageName = setting.packageName,
+                    appName = setting.appName,
+                    isRecent = false,
+                    isInstalled = false  // Mark as not installed (greyed out)
+                )
+            }
+
+            // Combine both lists
+            val allApps = (installedAppsWithLauncher + appsFromSettings)
+                .distinctBy { it.packageName }
+                .sortedWith(
+                    compareByDescending<InstalledApp> { it.isInstalled }  // Installed first
+                        .thenByDescending { it.isRecent }  // Then recent
+                        .thenBy { it.appName }  // Then alphabetically
+                )
 
             _installedApps.value = allApps
         }

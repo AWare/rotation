@@ -30,13 +30,20 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Get package name from intent if launched from tile
+        val targetPackage = intent?.getStringExtra(EXTRA_TARGET_PACKAGE)
+
         setContent {
             RotationTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    RotationNavHost(viewModel)
+                    RotationNavHost(
+                        viewModel = viewModel,
+                        initialPackage = targetPackage
+                    )
                 }
             }
         }
@@ -47,15 +54,29 @@ class MainActivity : ComponentActivity() {
         // Check permissions when returning to the app
         viewModel.checkPermissions()
     }
+
+    companion object {
+        const val EXTRA_TARGET_PACKAGE = "target_package"
+    }
 }
 
 @Composable
-fun RotationNavHost(viewModel: MainViewModel) {
+fun RotationNavHost(
+    viewModel: MainViewModel,
+    initialPackage: String? = null
+) {
     val navController = rememberNavController()
+
+    // Determine start destination based on initial package
+    val startDestination = if (initialPackage != null) {
+        Screen.AppConfig.createRoute(initialPackage)
+    } else {
+        Screen.Global.route
+    }
 
     NavHost(
         navController = navController,
-        startDestination = Screen.Global.route
+        startDestination = startDestination
     ) {
         composable(Screen.Global.route) {
             // Handle back press on main screen to exit app

@@ -9,6 +9,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.asImageBitmap
@@ -149,7 +150,15 @@ fun PerAppSettingsScreen(
                                 onClick = {
                                     onAppClick(app.packageName)
                                 },
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .then(
+                                        if (!app.isInstalled) {
+                                            Modifier.alpha(0.5f)  // Greyed out for uninstalled apps
+                                        } else {
+                                            Modifier
+                                        }
+                                    ),
                                 backgroundColor = if (currentSetting != null)
                                     RiscOsColors.actionGreen.copy(alpha = 0.15f)
                                 else
@@ -182,7 +191,7 @@ fun PerAppSettingsScreen(
                                         modifier = Modifier.weight(1f)
                                     ) {
                                         RiscOsLabel(
-                                            text = app.appName,
+                                            text = app.appName + if (!app.isInstalled) " (Not Installed)" else "",
                                             fontWeight = if (app.isRecent) FontWeight.Bold else FontWeight.Normal,
                                             maxLines = 1
                                         )

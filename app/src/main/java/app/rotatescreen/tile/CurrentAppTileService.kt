@@ -1,6 +1,7 @@
 package app.rotatescreen.tile
 
 import android.app.ActivityManager
+import android.app.PendingIntent
 import android.content.Intent
 import android.os.Build
 import android.service.quicksettings.Tile
@@ -10,6 +11,7 @@ import app.rotatescreen.data.repository.OrientationRepository
 import app.rotatescreen.domain.model.AppOrientationSetting
 import app.rotatescreen.domain.model.ScreenOrientation
 import app.rotatescreen.domain.model.TargetScreen
+import app.rotatescreen.ui.MainActivity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -134,7 +136,23 @@ class CurrentAppTileService : TileService() {
         qsTile?.apply {
             state = Tile.STATE_ACTIVE
             label = "$appName: ${orientation.displayName}"
-            contentDescription = "Current app: $appName, Orientation: ${orientation.displayName}"
+            contentDescription = "Current app: $appName, Orientation: ${orientation.displayName}. Long press to configure."
+
+            // For Android 13+, set a PendingIntent to open MainActivity with the package
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                val intent = Intent(this@CurrentAppTileService, MainActivity::class.java).apply {
+                    putExtra(MainActivity.EXTRA_TARGET_PACKAGE, packageName)
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                }
+                val pendingIntent = PendingIntent.getActivity(
+                    this@CurrentAppTileService,
+                    packageName.hashCode(),
+                    intent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+                setActivityLaunchForClick(pendingIntent)
+            }
+
             updateTile()
         }
     }

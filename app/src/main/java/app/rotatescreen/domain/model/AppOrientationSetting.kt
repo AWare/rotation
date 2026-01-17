@@ -38,5 +38,6 @@ data class InstalledApp(
     val packageName: String,
     val appName: String,
     val iconPath: String? = null,
-    val isRecent: Boolean = false
+    val isRecent: Boolean = false,
+    val isInstalled: Boolean = true  // False if app has saved settings but is no longer installed
 )
