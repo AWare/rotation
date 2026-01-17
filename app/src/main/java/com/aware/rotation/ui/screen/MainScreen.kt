@@ -14,6 +14,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.aware.rotation.domain.model.ScreenOrientation
+import com.aware.rotation.domain.model.TargetScreen
 import com.aware.rotation.ui.MainViewModel
 import com.aware.rotation.ui.components.*
 
@@ -177,15 +178,27 @@ fun MainScreen(viewModel: MainViewModel) {
                                         ) {
                                             RiscOsLabel(
                                                 text = app.appName,
-                                                modifier = Modifier.weight(1f)
+                                                modifier = Modifier.weight(1f),
+                                                maxLines = 1
                                             )
-                                            RiscOsLabel(
-                                                text = currentSetting?.orientation?.displayName ?: "Default",
-                                                fontWeight = if (currentSetting != null)
-                                                    FontWeight.Bold
-                                                else
-                                                    FontWeight.Normal
-                                            )
+                                            Column(
+                                                horizontalAlignment = Alignment.End
+                                            ) {
+                                                RiscOsLabel(
+                                                    text = currentSetting?.orientation?.displayName ?: "Default",
+                                                    fontWeight = if (currentSetting != null)
+                                                        FontWeight.Bold
+                                                    else
+                                                        FontWeight.Normal,
+                                                    maxLines = 1
+                                                )
+                                                if (currentSetting != null && currentSetting.targetScreen !is TargetScreen.AllScreens) {
+                                                    RiscOsLabel(
+                                                        text = currentSetting.targetScreen.displayName,
+                                                        maxLines = 1
+                                                    )
+                                                }
+                                            }
                                         }
                                     }
 
@@ -197,10 +210,13 @@ fun MainScreen(viewModel: MainViewModel) {
                                                 .padding(top = 4.dp, start = 8.dp, end = 8.dp, bottom = 4.dp),
                                             verticalArrangement = Arrangement.spacedBy(8.dp)
                                         ) {
-                                            // Screen selector for this app
+                                            // Screen selector for this app - show saved or default
+                                            val currentTargetScreen = currentSetting?.targetScreen
+                                                ?: viewModel.getSelectedScreenForApp(app.packageName)
+
                                             ScreenSelector(
                                                 availableScreens = availableScreens,
-                                                selectedScreen = viewModel.getSelectedScreenForApp(app.packageName),
+                                                selectedScreen = currentTargetScreen,
                                                 onScreenSelected = {
                                                     viewModel.setAppTargetScreen(app.packageName, it)
                                                 }

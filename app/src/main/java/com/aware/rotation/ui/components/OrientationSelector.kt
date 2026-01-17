@@ -91,22 +91,24 @@ private fun OrientationButton(
     RiscOsButton(
         onClick = onClick,
         isSelected = isSelected,
-        modifier = modifier.height(48.dp),
-        contentPadding = PaddingValues(8.dp)
+        modifier = modifier.height(56.dp),
+        contentPadding = PaddingValues(6.dp)
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier.fillMaxWidth()
         ) {
             // Icon representation with text characters
             RiscOsLabel(
                 text = getOrientationSymbol(orientation),
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
+                maxLines = 1
             )
             Spacer(modifier = Modifier.height(2.dp))
             RiscOsLabel(
-                text = getShortName(orientation)
+                text = getShortName(orientation),
+                maxLines = 1
             )
         }
     }
@@ -114,12 +116,12 @@ private fun OrientationButton(
 
 private fun getOrientationSymbol(orientation: ScreenOrientation): String {
     return when (orientation) {
-        ScreenOrientation.Unspecified -> "⟲"
+        ScreenOrientation.Unspecified -> "↻"
         ScreenOrientation.Portrait -> "▯"
         ScreenOrientation.Landscape -> "▭"
-        ScreenOrientation.ReversePortrait -> "▯↓"
-        ScreenOrientation.ReverseLandscape -> "▭↓"
-        ScreenOrientation.Sensor -> "◈"
+        ScreenOrientation.ReversePortrait -> "⤸"
+        ScreenOrientation.ReverseLandscape -> "⤹"
+        ScreenOrientation.Sensor -> "◎"
     }
 }
 

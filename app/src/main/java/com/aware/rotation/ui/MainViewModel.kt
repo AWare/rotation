@@ -81,6 +81,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         .withGlobalOrientation(globalOrientation)
                         .copy(perAppSettings = settings.associateBy { it.packageName })
                 }
+
+                // Load saved screen selections for apps
+                val screenSelections = settings.associate {
+                    it.packageName to it.targetScreen
+                }
+                _selectedAppScreens.value = screenSelections
             }
         }
     }

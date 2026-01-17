@@ -44,7 +44,7 @@ fun RiscOsButton(
     modifier: Modifier = Modifier,
     isSelected: Boolean = false,
     backgroundColor: Color = RiscOsColors.lightGray,
-    contentPadding: PaddingValues = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+    contentPadding: PaddingValues = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
     content: @Composable RowScope.() -> Unit
 ) {
     Box(
@@ -58,6 +58,7 @@ fun RiscOsButton(
         Row(
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth(),
             content = content
         )
     }
@@ -132,14 +133,18 @@ fun RiscOsWindow(
 fun RiscOsLabel(
     text: String,
     modifier: Modifier = Modifier,
-    fontWeight: FontWeight = FontWeight.Normal
+    fontWeight: FontWeight = FontWeight.Normal,
+    maxLines: Int = 1
 ) {
     Text(
         text = text,
         modifier = modifier,
         fontFamily = FontFamily.Monospace,
         fontWeight = fontWeight,
-        color = RiscOsColors.black
+        color = RiscOsColors.black,
+        style = MaterialTheme.typography.bodySmall,
+        maxLines = maxLines,
+        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
     )
 }
 
