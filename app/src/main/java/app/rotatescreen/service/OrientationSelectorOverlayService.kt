@@ -77,18 +77,36 @@ class OrientationSelectorOverlayService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        Log.d(TAG, "onStartCommand called with action: ${intent?.action}")
         intent?.let { handleIntent(it) }
         return START_NOT_STICKY
     }
 
     private fun handleIntent(intent: Intent) {
+        Log.d(TAG, "handleIntent: action=${intent.action}")
         when (intent.action) {
             ACTION_SHOW_SELECTOR -> {
-                val packageName = intent.getStringExtra(EXTRA_PACKAGE_NAME) ?: return
-                val appName = intent.getStringExtra(EXTRA_APP_NAME) ?: packageName
-                val displayIds = intent.getIntArrayExtra(EXTRA_DISPLAY_IDS) ?: intArrayOf(0)
+                val packageName = intent.getStringExtra(EXTRA_PACKAGE_NAME)
+                val appName = intent.getStringExtra(EXTRA_APP_NAME)
+                val displayIds = intent.getIntArrayExtra(EXTRA_DISPLAY_IDS)
 
-                showSelectorOverlay(packageName, appName, displayIds.toList())
+                Log.d(TAG, "ACTION_SHOW_SELECTOR: pkg=$packageName, app=$appName, displays=${displayIds?.contentToString()}")
+
+                if (packageName == null) {
+                    Log.e(TAG, "Missing package name!")
+                    stopSelf()
+                    return
+                }
+
+                showSelectorOverlay(
+                    packageName,
+                    appName ?: packageName,
+                    displayIds?.toList() ?: listOf(0)
+                )
+            }
+            else -> {
+                Log.w(TAG, "Unknown action: ${intent.action}")
+                stopSelf()
             }
         }
     }
@@ -97,12 +115,19 @@ class OrientationSelectorOverlayService : Service() {
         // Check permission first
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
             Log.e(TAG, "SYSTEM_ALERT_WINDOW permission not granted!")
+            android.widget.Toast.makeText(
+                this,
+                "Display over other apps permission required",
+                android.widget.Toast.LENGTH_SHORT
+            ).show()
             stopSelf()
             return
         }
 
         serviceScope.launch {
             try {
+                Log.d(TAG, "Showing selector for $appName on ${displayIds.size} displays")
+
                 // Remove any existing overlays first
                 dismissAllOverlays()
 
@@ -111,10 +136,19 @@ class OrientationSelectorOverlayService : Service() {
                     val display = displayManager.displays.find { it.displayId == displayId }
                     if (display != null) {
                         showOverlayOnDisplay(display.displayId, packageName, appName)
+                    } else {
+                        Log.w(TAG, "Display $displayId not found")
                     }
                 }
+
+                Log.d(TAG, "Successfully showed ${overlayViews.size} overlays")
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to show selector overlay", e)
+                android.widget.Toast.makeText(
+                    this@OrientationSelectorOverlayService,
+                    "Error showing overlay: ${e.message}",
+                    android.widget.Toast.LENGTH_SHORT
+                ).show()
                 stopSelf()
             }
         }

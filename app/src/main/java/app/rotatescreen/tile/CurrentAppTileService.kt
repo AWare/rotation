@@ -57,6 +57,27 @@ class CurrentAppTileService : TileService() {
                 try {
                     android.util.Log.d("CurrentAppTileService", "Showing orientation selector for $packageName")
 
+                    // Check if we have overlay permission
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
+                        !android.provider.Settings.canDrawOverlays(this@CurrentAppTileService)) {
+                        // Show toast to inform user
+                        android.widget.Toast.makeText(
+                            this@CurrentAppTileService,
+                            "Please grant 'Display over other apps' permission in app settings",
+                            android.widget.Toast.LENGTH_LONG
+                        ).show()
+
+                        // Open the permission settings for OUR app (not the target app)
+                        val intent = android.content.Intent(
+                            android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                            android.net.Uri.parse("package:${this@CurrentAppTileService.packageName}")
+                        ).apply {
+                            flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+                        }
+                        startActivity(intent)
+                        return@launch
+                    }
+
                     // Get app name
                     val appName = try {
                         packageManager.getApplicationInfo(packageName, 0)
