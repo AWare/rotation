@@ -58,8 +58,9 @@ class CurrentAppTileService : TileService() {
                 try {
                     android.util.Log.d("CurrentAppTileService", "Processing click for $packageName")
 
-                    // Get current setting
-                    val currentSetting = repository?.getSetting(packageName)?.getOrNull()
+                    // Get current setting (use first one or default)
+                    val currentSettingList = repository?.getSetting(packageName)?.getOrNull()
+                    val currentSetting = currentSettingList?.firstOrNull()
                     val currentOrientation = currentSetting?.orientation ?: ScreenOrientation.Unspecified
 
                     // Find next orientation
@@ -141,7 +142,8 @@ class CurrentAppTileService : TileService() {
             if (packageName != null && packageName != this.packageName) {
                 currentAppPackage = packageName
                 serviceScope?.launch {
-                    val currentSetting = repository?.getSetting(packageName)?.getOrNull()
+                    val currentSettingList = repository?.getSetting(packageName)?.getOrNull()
+                    val currentSetting = currentSettingList?.firstOrNull()
                     val appName = try {
                         packageManager.getApplicationInfo(packageName, 0)
                             .loadLabel(packageManager).toString()
