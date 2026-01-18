@@ -193,11 +193,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
 
                 // Load saved screen selections for apps
-                // For each app, select the most recently modified screen setting
+                // For each app, select the most recently modified screen setting (use first as fallback)
                 val screenSelections = settings
                     .groupBy { it.packageName }
                     .mapValues { (_, settingsForApp) ->
-                        settingsForApp.maxByOrNull { it.lastModified }?.targetScreen ?: TargetScreen.AllScreens
+                        settingsForApp.firstOrNull()?.targetScreen ?: TargetScreen.AllScreens
                     }
                 _selectedAppScreens.value = screenSelections
             }
@@ -450,8 +450,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun toggleAppSettingEnabled(packageName: String) {
         viewModelScope.launch {
-            val currentSetting = state.value.perAppSettings[packageName] ?: return@launch
-            repository.saveSetting(currentSetting.toggleEnabled())
+            val currentSettings = state.value.perAppSettings[packageName] ?: return@launch
+            // Toggle all settings for this app
+            val toggledSettings = currentSettings.map { it.toggleEnabled() }
+            repository.saveSettings(toggledSettings)
         }
     }
 
@@ -544,9 +546,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     is TargetScreen.AllScreens -> _state.value.globalOrientation
                     is TargetScreen.SpecificScreen -> {
                         // Check for per-app setting first, otherwise global
-                        _state.value.perAppSettings.values.firstOrNull {
-                            it.targetScreen.id == targetScreen.id
-                        }?.orientation ?: _state.value.globalOrientation
+                        _state.value.perAppSettings.values
+                            .flatten()
+                            .firstOrNull { it.targetScreen.id == targetScreen.id }
+                            ?.orientation ?: _state.value.globalOrientation
                     }
                 }
                 putExtra("ORIENTATION", orientation.displayName)

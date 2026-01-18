@@ -146,7 +146,8 @@ fun PerAppSettingsScreen(
                 ) {
                     if (filteredApps.isNotEmpty()) {
                         filteredApps.forEach { app ->
-                            val currentSetting = state.perAppSettings[app.packageName]
+                            val currentSettings = state.perAppSettings[app.packageName]
+                            val hasSetting = currentSettings != null && currentSettings.isNotEmpty()
 
                             RiscOsButton(
                                 onClick = {
@@ -161,7 +162,7 @@ fun PerAppSettingsScreen(
                                             Modifier
                                         }
                                     ),
-                                backgroundColor = if (currentSetting != null)
+                                backgroundColor = if (hasSetting)
                                     RiscOsColors.actionGreen.copy(alpha = 0.15f)
                                 else
                                     RiscOsColors.white,
@@ -197,9 +198,14 @@ fun PerAppSettingsScreen(
                                             fontWeight = if (app.isRecent) FontWeight.Bold else FontWeight.Normal,
                                             maxLines = 1
                                         )
-                                        if (currentSetting != null) {
+                                        if (hasSetting) {
+                                            val settingText = if (currentSettings!!.size == 1) {
+                                                "${currentSettings[0].orientation.displayName} • ${currentSettings[0].targetScreen.displayName}"
+                                            } else {
+                                                "${currentSettings.size} screens configured"
+                                            }
                                             RiscOsLabel(
-                                                text = "${currentSetting.orientation.displayName} • ${currentSetting.targetScreen.displayName}",
+                                                text = settingText,
                                                 maxLines = 1
                                             )
                                         }
