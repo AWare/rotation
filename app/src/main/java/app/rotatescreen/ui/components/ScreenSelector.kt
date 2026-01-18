@@ -77,13 +77,13 @@ private fun ScreenButton(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.fillMaxWidth()
         ) {
-            // Icon symbol - aspect ratio aware
+            // Icon symbol - aspect ratio aware with distinct shapes
             val icon = when (screen) {
                 is TargetScreen.AllScreens -> "⊞"
                 is TargetScreen.SpecificScreen -> when (screen.ratio) {
-                    AspectRatio.PORTRAIT -> "▯"    // Tall rectangle
-                    AspectRatio.LANDSCAPE -> "▭"   // Wide rectangle
-                    AspectRatio.SQUARE -> "▢"      // Square
+                    AspectRatio.PORTRAIT -> "▯"     // Tall rectangle (portrait)
+                    AspectRatio.LANDSCAPE -> "▬"    // Very wide rectangle (widescreen)
+                    AspectRatio.SQUARE -> "▪"       // Small square (nearly square display)
                 }
             }
 

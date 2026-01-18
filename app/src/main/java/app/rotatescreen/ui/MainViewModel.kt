@@ -205,16 +205,26 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 displays.forEachIndexed { index, display ->
                     val screenName = if (index == 0) "Primary" else "Auxiliary"
 
-                    // Calculate aspect ratio
+                    // Calculate aspect ratio with more sensitive detection
                     val metrics = android.util.DisplayMetrics()
                     display.getMetrics(metrics)
                     val width = metrics.widthPixels
                     val height = metrics.heightPixels
 
+                    // Use the larger/smaller ratio for better detection
+                    val ratio = if (width > height) {
+                        width.toFloat() / height.toFloat()
+                    } else {
+                        height.toFloat() / width.toFloat()
+                    }
+
                     val aspectRatio = when {
-                        height > width * 1.1 -> AspectRatio.PORTRAIT
-                        width > height * 1.1 -> AspectRatio.LANDSCAPE
-                        else -> AspectRatio.SQUARE
+                        // Portrait if height > width
+                        height > width * 1.05 -> AspectRatio.PORTRAIT
+                        // Square if ratio is close to 1:1 (within 5%)
+                        ratio < 1.05 -> AspectRatio.SQUARE
+                        // Otherwise landscape
+                        else -> AspectRatio.LANDSCAPE
                     }
 
                     screens.add(TargetScreen.SpecificScreen(display.displayId, screenName, aspectRatio))
