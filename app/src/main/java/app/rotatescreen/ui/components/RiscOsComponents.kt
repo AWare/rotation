@@ -99,7 +99,71 @@ data class RiscOsPalette(
             actionYellow = Color(0xFFFFDD66)
         )
 
-        val All = listOf(Classic, Aqua, Sand, Dark)
+        // NGE Unit-01 (Purple/Green)
+        val NGEUnit01 = RiscOsPalette(
+            name = "EVA-01",
+            background = Color(0xFF1A0D2E),
+            lightGray = Color(0xFF2A1B3D),
+            mediumGray = Color(0xFF1A0D2E),
+            darkGray = Color(0xFF0D0415),
+            veryDarkGray = Color(0xFF000000),
+            white = Color(0xFFFFFFFF),
+            black = Color(0xFF000000),
+            actionBlue = Color(0xFFB565FF),
+            actionGreen = Color(0xFF00FF41),
+            actionRed = Color(0xFFFF1166),
+            actionYellow = Color(0xFFFF8C00)
+        )
+
+        // NGE Unit-00 (Blue/White)
+        val NGEUnit00 = RiscOsPalette(
+            name = "EVA-00",
+            background = Color(0xFF0A1929),
+            lightGray = Color(0xFF1E3A5F),
+            mediumGray = Color(0xFF0A1929),
+            darkGray = Color(0xFF050C14),
+            veryDarkGray = Color(0xFF000000),
+            white = Color(0xFFFFFFFF),
+            black = Color(0xFF000000),
+            actionBlue = Color(0xFF4FC3F7),
+            actionGreen = Color(0xFF66FFB2),
+            actionRed = Color(0xFFFF5252),
+            actionYellow = Color(0xFFFFD740)
+        )
+
+        // NGE Unit-02 (Red/Orange)
+        val NGEUnit02 = RiscOsPalette(
+            name = "EVA-02",
+            background = Color(0xFF2E1410),
+            lightGray = Color(0xFF4A2318),
+            mediumGray = Color(0xFF2E1410),
+            darkGray = Color(0xFF1A0A08),
+            veryDarkGray = Color(0xFF000000),
+            white = Color(0xFFFFFFFF),
+            black = Color(0xFF000000),
+            actionBlue = Color(0xFFFF6B35),
+            actionGreen = Color(0xFF66FF66),
+            actionRed = Color(0xFFFF3333),
+            actionYellow = Color(0xFFFFAA00)
+        )
+
+        // NGE Terminal Dogma (Dark Purple/Cyan)
+        val NGETerminal = RiscOsPalette(
+            name = "Terminal",
+            background = Color(0xFF0D0D1E),
+            lightGray = Color(0xFF1A1A33),
+            mediumGray = Color(0xFF0D0D1E),
+            darkGray = Color(0xFF06060F),
+            veryDarkGray = Color(0xFF000000),
+            white = Color(0xFFFFFFFF),
+            black = Color(0xFF000000),
+            actionBlue = Color(0xFF00FFFF),
+            actionGreen = Color(0xFF00FF88),
+            actionRed = Color(0xFFFF0066),
+            actionYellow = Color(0xFFFFFF00)
+        )
+
+        val All = listOf(Classic, Aqua, Sand, Dark, NGEUnit01, NGEUnit00, NGEUnit02, NGETerminal)
     }
 }
 
@@ -143,7 +207,7 @@ object RiscOsColors {
 }
 
 /**
- * RISC OS style background - solid color
+ * RISC OS style mottled background with subtle texture
  */
 @Composable
 fun MottledBackground(
@@ -152,7 +216,36 @@ fun MottledBackground(
     content: @Composable BoxScope.() -> Unit
 ) {
     Box(
-        modifier = modifier.background(baseColor)
+        modifier = modifier
+            .background(baseColor)
+            .drawBehind {
+                val width = size.width.toInt()
+                val height = size.height.toInt()
+                val seed = 42
+
+                // Draw sparse stipple pattern (every 8th pixel, 30% density)
+                var rngState = seed
+                for (x in 0 until width step 8) {
+                    for (y in 0 until height step 8) {
+                        // Simple inline pseudo-random
+                        rngState = (rngState * 1103515245 + 12345) and 0x7fffffff
+                        if ((rngState % 10) < 3) { // 30% density
+                            val brightness = if ((rngState and 1) == 0) 0.03f else -0.03f
+                            val color = Color(
+                                red = (baseColor.red + brightness).coerceIn(0f, 1f),
+                                green = (baseColor.green + brightness).coerceIn(0f, 1f),
+                                blue = (baseColor.blue + brightness).coerceIn(0f, 1f),
+                                alpha = 1f
+                            )
+                            drawRect(
+                                color = color,
+                                topLeft = Offset(x.toFloat(), y.toFloat()),
+                                size = androidx.compose.ui.geometry.Size(2f, 2f)
+                            )
+                        }
+                    }
+                }
+            }
     ) {
         content()
     }

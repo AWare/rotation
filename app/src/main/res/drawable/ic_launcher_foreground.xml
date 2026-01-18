@@ -4,30 +4,84 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <!-- Simple RISC OS style rotation icon -->
-    <!-- Two curved arrows forming a circle -->
+    <!-- 16-bit style dynamic rotation icon -->
 
-    <!-- Top curved arrow (clockwise) -->
+    <!-- Background circle glow (subtle) -->
     <path
-        android:strokeColor="#000000"
-        android:strokeWidth="8"
+        android:fillColor="#E0E0E0"
+        android:pathData="M54,54 m-38,0 a38,38 0,1,1 76,0 a38,38 0,1,1 -76,0"/>
+
+    <!-- Center device (phone in portrait) -->
+    <path
+        android:fillColor="#333333"
+        android:pathData="M46,38 L62,38 L62,70 L46,70 Z"/>
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M48,40 L60,40 L60,66 L48,66 Z"/>
+    <!-- Screen content - gradient effect -->
+    <path
+        android:fillColor="#4FC3F7"
+        android:pathData="M49,41 L59,41 L59,60 L49,60 Z"/>
+    <!-- Home button -->
+    <path
+        android:fillColor="#666666"
+        android:pathData="M54,68 m-2,0 a2,2 0,1,1 4,0 a2,2 0,1,1 -4,0"/>
+
+    <!-- Top curved arrow (clockwise - purple/blue) -->
+    <path
+        android:strokeColor="#B565FF"
+        android:strokeWidth="6"
         android:strokeLineCap="square"
         android:fillColor="#00000000"
-        android:pathData="M78,42 A24,24 0,1,0 66,78"/>
-    <!-- Arrow head -->
+        android:pathData="M76,40 A26,26 0,1,0 68,76"/>
+    <!-- Arrow head with pixel style -->
     <path
-        android:fillColor="#000000"
-        android:pathData="M66,78 L60,72 L72,66 Z"/>
-
-    <!-- Bottom curved arrow (counter-clockwise) -->
+        android:fillColor="#B565FF"
+        android:pathData="M68,76 L64,70 L74,68 Z"/>
+    <!-- Motion lines top -->
     <path
-        android:strokeColor="#000000"
-        android:strokeWidth="8"
+        android:strokeColor="#B565FF"
+        android:strokeWidth="3"
         android:strokeLineCap="square"
         android:fillColor="#00000000"
-        android:pathData="M30,66 A24,24 0,1,0 42,30"/>
-    <!-- Arrow head -->
+        android:pathData="M82,34 L86,30"/>
     <path
-        android:fillColor="#000000"
-        android:pathData="M42,30 L48,36 L36,42 Z"/>
+        android:strokeColor="#B565FF"
+        android:strokeWidth="3"
+        android:strokeLineCap="square"
+        android:fillColor="#00000000"
+        android:pathData="M78,28 L82,24"/>
+
+    <!-- Bottom curved arrow (counter-clockwise - green) -->
+    <path
+        android:strokeColor="#00FF41"
+        android:strokeWidth="6"
+        android:strokeLineCap="square"
+        android:fillColor="#00000000"
+        android:pathData="M32,68 A26,26 0,1,0 40,32"/>
+    <!-- Arrow head with pixel style -->
+    <path
+        android:fillColor="#00FF41"
+        android:pathData="M40,32 L44,38 L34,40 Z"/>
+    <!-- Motion lines bottom -->
+    <path
+        android:strokeColor="#00FF41"
+        android:strokeWidth="3"
+        android:strokeLineCap="square"
+        android:fillColor="#00000000"
+        android:pathData="M26,74 L22,78"/>
+    <path
+        android:strokeColor="#00FF41"
+        android:strokeWidth="3"
+        android:strokeLineCap="square"
+        android:fillColor="#00000000"
+        android:pathData="M30,80 L26,84"/>
+
+    <!-- Pixel-style accent dots -->
+    <path
+        android:fillColor="#FF8C00"
+        android:pathData="M54,26 m-2,0 a2,2 0,1,1 4,0 a2,2 0,1,1 -4,0"/>
+    <path
+        android:fillColor="#FF1166"
+        android:pathData="M54,82 m-2,0 a2,2 0,1,1 4,0 a2,2 0,1,1 -4,0"/>
 </vector>
