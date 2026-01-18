@@ -357,26 +357,27 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         val sortedByRatio = displayInfos.sortedBy { it.ratio }
                         val minRatio = sortedByRatio.first().ratio
                         val maxRatio = sortedByRatio.last().ratio
-                    val ratioRange = maxRatio - minRatio
+                        val ratioRange = maxRatio - minRatio
 
-                    displayInfos.forEach { info ->
-                        val aspectRatio = when {
-                            // Portrait if height > width
-                            info.height > info.width -> AspectRatio.PORTRAIT
-                            // If there's meaningful difference between screens
-                            ratioRange > 0.15 -> {
-                                // Comparative: where does this screen fall?
-                                val positionInRange = (info.ratio - minRatio) / ratioRange
-                                when {
-                                    positionInRange > 0.6 -> AspectRatio.LANDSCAPE  // Wider end
-                                    positionInRange < 0.4 -> AspectRatio.SQUARE     // More square end
-                                    else -> AspectRatio.LANDSCAPE  // Middle defaults to landscape
+                        displayInfos.forEach { info ->
+                            val aspectRatio = when {
+                                // Portrait if height > width
+                                info.height > info.width -> AspectRatio.PORTRAIT
+                                // If there's meaningful difference between screens
+                                ratioRange > 0.15 -> {
+                                    // Comparative: where does this screen fall?
+                                    val positionInRange = (info.ratio - minRatio) / ratioRange
+                                    when {
+                                        positionInRange > 0.6 -> AspectRatio.LANDSCAPE  // Wider end
+                                        positionInRange < 0.4 -> AspectRatio.SQUARE     // More square end
+                                        else -> AspectRatio.LANDSCAPE  // Middle defaults to landscape
+                                    }
                                 }
+                                // All screens very similar - use absolute threshold
+                                else -> if (info.ratio < 1.3) AspectRatio.SQUARE else AspectRatio.LANDSCAPE
                             }
-                            // All screens very similar - use absolute threshold
-                            else -> if (info.ratio < 1.3) AspectRatio.SQUARE else AspectRatio.LANDSCAPE
+                            screens.add(TargetScreen.SpecificScreen(info.displayId, info.name, aspectRatio))
                         }
-                        screens.add(TargetScreen.SpecificScreen(info.displayId, info.name, aspectRatio))
                     }
                 }
 
