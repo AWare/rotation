@@ -5,15 +5,18 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import app.rotatescreen.data.local.dao.AppOrientationDao
+import app.rotatescreen.data.local.dao.ScreenProfileDao
 import app.rotatescreen.data.local.entity.AppOrientationEntity
+import app.rotatescreen.data.local.entity.ScreenProfileEntity
 
 @Database(
-    entities = [AppOrientationEntity::class],
-    version = 1,
+    entities = [AppOrientationEntity::class, ScreenProfileEntity::class],
+    version = 3,
     exportSchema = false
 )
 abstract class RotationDatabase : RoomDatabase() {
     abstract fun appOrientationDao(): AppOrientationDao
+    abstract fun screenProfileDao(): ScreenProfileDao
 
     companion object {
         @Volatile

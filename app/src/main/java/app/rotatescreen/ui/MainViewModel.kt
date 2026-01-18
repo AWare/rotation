@@ -64,6 +64,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         else apps.filter { it.appName.contains(query, ignoreCase = true) }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    private val displayListener = object : DisplayManager.DisplayListener {
+        override fun onDisplayAdded(displayId: Int) {
+            android.util.Log.d("MainViewModel", "Display added: $displayId")
+            loadAvailableDisplays()
+        }
+
+        override fun onDisplayRemoved(displayId: Int) {
+            android.util.Log.d("MainViewModel", "Display removed: $displayId")
+            loadAvailableDisplays()
+            handleDisplayDisconnected(displayId)
+        }
+
+        override fun onDisplayChanged(displayId: Int) {
+            android.util.Log.d("MainViewModel", "Display changed: $displayId")
+            loadAvailableDisplays()
+        }
+    }
+
     init {
         val database = RotationDatabase.getInstance(context)
         repository = OrientationRepository(database.appOrientationDao())
@@ -73,6 +91,29 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         loadInstalledApps()
         loadAvailableDisplays()
         checkPermissions()
+
+        // Register display listener for hot-swap detection
+        displayManager.registerDisplayListener(displayListener, null)
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        // Unregister display listener
+        displayManager.unregisterDisplayListener(displayListener)
+    }
+
+    private fun handleDisplayDisconnected(displayId: Int) {
+        viewModelScope.launch {
+            // Clear selected screen if the disconnected display was selected
+            if (_selectedGlobalScreen.value.id == displayId) {
+                _selectedGlobalScreen.value = TargetScreen.AllScreens
+            }
+
+            // Update app screen selections
+            _selectedAppScreens.update { current ->
+                current.filterValues { it.id != displayId }
+            }
+        }
     }
 
     private fun observeState() {
@@ -401,10 +442,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun flashScreen(targetScreen: TargetScreen) {
         try {
             val currentPalette = app.rotatescreen.ui.components.RiscOsColors.currentPalette
+
+            // Get display information if specific screen
+            var displayInfo = ""
+            if (targetScreen is TargetScreen.SpecificScreen) {
+                val display = displayManager.displays.find { it.displayId == targetScreen.id }
+                if (display != null) {
+                    val metrics = android.util.DisplayMetrics()
+                    display.getMetrics(metrics)
+                    displayInfo = "${metrics.widthPixels}×${metrics.heightPixels} • ${metrics.densityDpi}dpi"
+                }
+            }
+
             val intent = Intent(context, OrientationControlService::class.java).apply {
                 action = "com.aware.rotation.action.FLASH_SCREEN"
                 putExtra(OrientationControlService.EXTRA_SCREEN_ID, targetScreen.id)
                 putExtra("SCREEN_NAME", targetScreen.displayName)
+                putExtra("DISPLAY_INFO", displayInfo)
+                putExtra("ASPECT_RATIO", targetScreen.aspectRatio.name)
                 putExtra("PALETTE_NAME", currentPalette.name)
                 putExtra("COLOR_1", currentPalette.actionBlue.value.toLong())
                 putExtra("COLOR_2", currentPalette.actionGreen.value.toLong())

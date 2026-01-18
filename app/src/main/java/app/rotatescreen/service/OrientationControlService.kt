@@ -98,6 +98,8 @@ class OrientationControlService : Service() {
             ACTION_FLASH_SCREEN -> {
                 val screenId = intent.getIntExtra(EXTRA_SCREEN_ID, -1)
                 val screenName = intent.getStringExtra("SCREEN_NAME") ?: "Screen"
+                val displayInfo = intent.getStringExtra("DISPLAY_INFO") ?: ""
+                val aspectRatio = intent.getStringExtra("ASPECT_RATIO") ?: ""
                 val orientation = intent.getStringExtra("ORIENTATION") ?: "Auto"
                 val color1 = intent.getLongExtra("COLOR_1", 0xFFB565FFL).toInt()
                 val color2 = intent.getLongExtra("COLOR_2", 0xFF00FF41L).toInt()
@@ -105,10 +107,10 @@ class OrientationControlService : Service() {
                 val bgColor = intent.getLongExtra("BG_COLOR", 0xFF1A0D2EL).toInt()
                 val textColor = intent.getLongExtra("TEXT_COLOR", 0xFFFFFFFFL).toInt()
 
-                Log.d(TAG, "FLASH_SCREEN: screenId=$screenId, name=$screenName, orientation=$orientation")
+                Log.d(TAG, "FLASH_SCREEN: screenId=$screenId, name=$screenName, info=$displayInfo, orientation=$orientation")
 
                 serviceScope.launch(Dispatchers.Main) {
-                    flashScreen(screenId, screenName, orientation, color1, color2, color3, bgColor, textColor)
+                    flashScreen(screenId, screenName, displayInfo, aspectRatio, orientation, color1, color2, color3, bgColor, textColor)
                 }
             }
         }
@@ -290,6 +292,8 @@ class OrientationControlService : Service() {
     private suspend fun flashScreen(
         displayId: Int,
         screenName: String = "Screen",
+        displayInfo: String = "",
+        aspectRatio: String = "",
         orientation: String = "Auto",
         color1: Int = android.graphics.Color.parseColor("#B565FF"),
         color2: Int = android.graphics.Color.parseColor("#00FF41"),
@@ -367,15 +371,33 @@ class OrientationControlService : Service() {
                     }
 
                     // Draw semi-transparent overlay for text readability
+                    val boxHeight = if (displayInfo.isNotEmpty()) 180f else 120f
                     paint.color = android.graphics.Color.argb(180, 0, 0, 0)
-                    canvas.drawRect(0f, height / 2 - 120f, width, height / 2 + 120f, paint)
+                    canvas.drawRect(0f, height / 2 - boxHeight, width, height / 2 + boxHeight, paint)
 
                     // Draw screen name
-                    canvas.drawText(screenName, width / 2, height / 2 - 20f, textPaint)
+                    var yPos = height / 2 - 60f
+                    textPaint.textSize = 80f
+                    canvas.drawText(screenName, width / 2, yPos, textPaint)
+
+                    // Draw display info (resolution and DPI) if available
+                    if (displayInfo.isNotEmpty()) {
+                        yPos += 70f
+                        textPaint.textSize = 40f
+                        canvas.drawText(displayInfo, width / 2, yPos, textPaint)
+                    }
+
+                    // Draw aspect ratio if available
+                    if (aspectRatio.isNotEmpty() && aspectRatio != "SQUARE") {
+                        yPos += 60f
+                        textPaint.textSize = 40f
+                        canvas.drawText(aspectRatio, width / 2, yPos, textPaint)
+                    }
 
                     // Draw orientation
+                    yPos += 70f
                     textPaint.textSize = 60f
-                    canvas.drawText(orientation, width / 2, height / 2 + 50f, textPaint)
+                    canvas.drawText(orientation, width / 2, yPos, textPaint)
                 }
             }
 
