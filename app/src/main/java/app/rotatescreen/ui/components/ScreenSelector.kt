@@ -58,9 +58,12 @@ private fun ScreenButton(
 ) {
     RiscOsButton(
         onClick = {
+            android.util.Log.d("ScreenSelector", "ScreenButton clicked: ${screen.displayName} (id=${screen.id}), isSelected=$isSelected")
             onClick()
+            android.util.Log.d("ScreenSelector", "onClick callback executed")
             // Flash the screen when clicked
             if (screen !is TargetScreen.AllScreens) {
+                android.util.Log.d("ScreenSelector", "Flashing screen: ${screen.displayName}")
                 onFlash?.invoke(screen)
             }
         },

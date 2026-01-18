@@ -189,13 +189,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 _state.update { currentState ->
                     currentState
                         .withGlobalOrientation(globalOrientation)
-                        .copy(perAppSettings = settings.associateBy { it.packageName })
+                        .copy(perAppSettings = settings.groupBy { it.packageName })
                 }
 
                 // Load saved screen selections for apps
-                val screenSelections = settings.associate {
-                    it.packageName to it.targetScreen
-                }
+                // For each app, select the most recently modified screen setting
+                val screenSelections = settings
+                    .groupBy { it.packageName }
+                    .mapValues { (_, settingsForApp) ->
+                        settingsForApp.maxByOrNull { it.lastModified }?.targetScreen ?: TargetScreen.AllScreens
+                    }
                 _selectedAppScreens.value = screenSelections
             }
         }
@@ -418,6 +421,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     ) {
         viewModelScope.launch {
             val targetScreen = getSelectedScreenForApp(packageName)
+            android.util.Log.d("MainViewModel", "setAppOrientation: $packageName -> ${orientation.displayName} on screen ${targetScreen.displayName} (id=${targetScreen.id})")
+
             val setting = AppOrientationSetting.create(
                 packageName = packageName,
                 appName = appName,
@@ -425,6 +430,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 targetScreen = targetScreen
             )
             repository.saveSetting(setting)
+
+            // Apply the orientation immediately
+            applyOrientation(orientation, targetScreen)
+            android.util.Log.d("MainViewModel", "Applied orientation immediately")
+
             // Refresh app list to show updated visual state
             loadInstalledApps()
         }

@@ -33,7 +33,9 @@ fun AppConfigScreen(
         filteredApps.find { it.packageName == packageName }
     }
 
-    val currentSetting = state.perAppSettings[packageName]
+    // Get the setting for the currently selected screen
+    val currentTargetScreen = viewModel.getSelectedScreenForApp(packageName)
+    val currentSetting = state.getSettingForAppAndDisplay(packageName, currentTargetScreen.id)
 
     MottledBackground(
         modifier = Modifier.fillMaxSize()
@@ -81,13 +83,11 @@ fun AppConfigScreen(
                 title = "Target Screen",
                 modifier = Modifier.fillMaxWidth()
             ) {
-                val currentTargetScreen = currentSetting?.targetScreen
-                    ?: viewModel.getSelectedScreenForApp(packageName)
-
                 ScreenSelector(
                     availableScreens = availableScreens,
                     selectedScreen = currentTargetScreen,
                     onScreenSelected = {
+                        android.util.Log.d("AppConfigScreen", "Screen selected: ${it.displayName} (id=${it.id}) for app $packageName")
                         viewModel.setAppTargetScreen(packageName, it)
                     },
                     onScreenFlash = { screen ->
@@ -104,11 +104,12 @@ fun AppConfigScreen(
                 OrientationSelector(
                     selectedOrientation = currentSetting?.orientation
                         ?: ScreenOrientation.Unspecified,
-                    onOrientationSelected = {
+                    onOrientationSelected = { orientation ->
+                        android.util.Log.d("AppConfigScreen", "Orientation selected: ${orientation.displayName} for app $packageName on screen ${currentTargetScreen.displayName} (id=${currentTargetScreen.id})")
                         viewModel.setAppOrientation(
                             packageName,
                             app.appName,
-                            it
+                            orientation
                         )
                     }
                 )
