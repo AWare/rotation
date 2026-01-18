@@ -3,11 +3,13 @@ package app.rotatescreen.service
 import android.accessibilityservice.AccessibilityService
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.hardware.display.DisplayManager
 import android.view.accessibility.AccessibilityEvent
 import arrow.core.Either
 import arrow.core.raise.either
 import app.rotatescreen.data.local.RotationDatabase
+import app.rotatescreen.data.preferences.PreferencesManager
 import app.rotatescreen.data.repository.OrientationRepository
 import app.rotatescreen.domain.model.AspectRatio
 import app.rotatescreen.domain.model.ScreenOrientation
@@ -16,9 +18,11 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /**
@@ -29,10 +33,21 @@ class ForegroundAppDetectorService : AccessibilityService() {
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var repository: OrientationRepository? = null
+    private var preferencesManager: PreferencesManager? = null
 
     // FP: Use immutable state transitions via StateFlow
     private val _currentPackageName = MutableStateFlow<String?>(null)
     private val _previousPackageName = MutableStateFlow<String?>(null)
+
+    // Track launcher packages for better exit detection
+    private val launcherPackages = MutableStateFlow<Set<String>>(emptySet())
+
+    // Debouncing: track last event timestamp
+    private var lastEventTimestamp = 0L
+    private val debounceDelayMs = 150L // Ignore events within 150ms of each other
+
+    // Track current applied orientation for proper restoration
+    private val _currentAppliedOrientation = MutableStateFlow<ScreenOrientation?>(null)
 
     private val displayManager by lazy {
         Either.catch {
@@ -45,6 +60,11 @@ class ForegroundAppDetectorService : AccessibilityService() {
         try {
             val database = RotationDatabase.getInstance(applicationContext)
             repository = OrientationRepository(database.appOrientationDao())
+            preferencesManager = PreferencesManager(applicationContext)
+
+            // Detect launcher packages for better exit detection
+            detectLauncherPackages()
+
             android.util.Log.d("ForegroundAppDetector", "Service initialized successfully")
         } catch (e: Exception) {
             android.util.Log.e("ForegroundAppDetector", "Failed to initialize service", e)
@@ -54,6 +74,14 @@ class ForegroundAppDetectorService : AccessibilityService() {
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         // FP: Pure validation
         val packageName = extractPackageName(event) ?: return
+
+        // FP: Debouncing - ignore rapid-fire events
+        val currentTime = System.currentTimeMillis()
+        if (currentTime - lastEventTimestamp < debounceDelayMs) {
+            android.util.Log.d("ForegroundAppDetector", "Debounced event for $packageName")
+            return
+        }
+        lastEventTimestamp = currentTime
 
         // FP: Avoid processing if package unchanged
         if (packageName == _currentPackageName.value) return
@@ -77,48 +105,85 @@ class ForegroundAppDetectorService : AccessibilityService() {
     @Synchronized
     private fun handleAppSwitch(newPackageName: String) {
         val previous = _currentPackageName.value
+        val isEnteringLauncher = launcherPackages.value.contains(newPackageName)
+        val isLeavingApp = previous != null && previous != newPackageName
 
         // Atomic state transition
         _previousPackageName.value = previous
         _currentPackageName.value = newPackageName
 
         // Side effects in separate functions
-        previous?.let { prevPkg ->
-            if (prevPkg != newPackageName) {
-                resetOrientationForApp(prevPkg)
+        if (isLeavingApp) {
+            previous?.let { prevPkg ->
+                // Better exit detection: always reset when leaving an app
+                android.util.Log.d(
+                    "ForegroundAppDetector",
+                    "Leaving app: $prevPkg, entering: $newPackageName (launcher: $isEnteringLauncher)"
+                )
+                resetOrientationForApp(prevPkg, isEnteringLauncher)
             }
         }
 
-        applyOrientationForApp(newPackageName)
+        // Only apply orientation if NOT entering launcher (launchers should use global orientation)
+        if (!isEnteringLauncher) {
+            applyOrientationForApp(newPackageName)
+        } else {
+            // Entering launcher - apply global orientation
+            android.util.Log.d("ForegroundAppDetector", "Entering launcher, applying global orientation")
+            applyGlobalOrientation()
+        }
     }
 
-    private fun resetOrientationForApp(packageName: String) {
+    /**
+     * Reset orientation when leaving an app
+     * Restores to global orientation preference instead of system default
+     */
+    private fun resetOrientationForApp(packageName: String, isEnteringLauncher: Boolean) {
         val repo = repository
-        if (repo == null) {
-            android.util.Log.w("ForegroundAppDetector", "Repository not initialized, cannot reset orientation")
+        val prefManager = preferencesManager
+
+        if (repo == null || prefManager == null) {
+            android.util.Log.w("ForegroundAppDetector", "Service not initialized, cannot reset orientation")
             return
         }
 
         serviceScope.launch {
             Either.catch {
-                android.util.Log.d("ForegroundAppDetector", "Resetting orientation for backgrounded app: $packageName")
+                android.util.Log.d(
+                    "ForegroundAppDetector",
+                    "Resetting orientation for backgrounded app: $packageName (entering launcher: $isEnteringLauncher)"
+                )
 
                 // Get all settings for this app
                 val settings = repo.getSetting(packageName).getOrNull() ?: return@catch
 
-                // Only reset if app has per-screen settings (not "All Screens")
-                val hasPerScreenSettings = settings.any { it.targetScreen.id != -1 }
+                // Check if app had custom orientation applied
+                val hadCustomOrientation = settings.any { it.enabled }
 
-                if (hasPerScreenSettings) {
-                    // Reset to system default (Unspecified/Auto)
+                if (hadCustomOrientation) {
+                    // Get the user's global orientation preference
+                    val globalOrientation = prefManager.globalOrientation.first()
+
+                    android.util.Log.d(
+                        "ForegroundAppDetector",
+                        "Restoring to global orientation: ${globalOrientation.displayName}"
+                    )
+
+                    // Restore to global orientation on all displays
                     displayManager?.displays?.forEach { display ->
                         sendOrientationIntent(
-                            ScreenOrientation.Unspecified.value,
+                            globalOrientation.value,
                             display.displayId
                         )
                     }
 
-                    android.util.Log.d("ForegroundAppDetector", "Reset orientation for $packageName")
+                    // Track that we've restored to global orientation
+                    _currentAppliedOrientation.value = globalOrientation
+
+                    android.util.Log.d(
+                        "ForegroundAppDetector",
+                        "Reset orientation for $packageName to ${globalOrientation.displayName}"
+                    )
                 }
             }.mapLeft { e ->
                 android.util.Log.e("ForegroundAppDetector", "Failed to reset orientation for $packageName", e)
@@ -151,6 +216,9 @@ class ForegroundAppDetectorService : AccessibilityService() {
                 // Apply the setting if found and enabled
                 setting?.takeIf { it.enabled }?.let { s ->
                     sendOrientationIntent(s.orientation.value, s.targetScreen.id)
+
+                    // Track the applied orientation
+                    _currentAppliedOrientation.value = s.orientation
 
                     android.util.Log.d(
                         "ForegroundAppDetector",
@@ -223,6 +291,75 @@ class ForegroundAppDetectorService : AccessibilityService() {
         }
     }
 
+    /**
+     * Detect all launcher (home screen) packages
+     * These are apps that handle the HOME intent category
+     */
+    private fun detectLauncherPackages() {
+        serviceScope.launch(Dispatchers.IO) {
+            Either.catch {
+                val pm = packageManager
+                val homeIntent = Intent(Intent.ACTION_MAIN).apply {
+                    addCategory(Intent.CATEGORY_HOME)
+                }
+
+                val launchers = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                    pm.queryIntentActivities(
+                        homeIntent,
+                        PackageManager.ResolveInfoFlags.of(PackageManager.MATCH_DEFAULT_ONLY.toLong())
+                    )
+                } else {
+                    @Suppress("DEPRECATION")
+                    pm.queryIntentActivities(homeIntent, PackageManager.MATCH_DEFAULT_ONLY)
+                }
+
+                val launcherPackageNames = launchers.mapNotNull { it.activityInfo?.packageName }.toSet()
+                launcherPackages.value = launcherPackageNames
+
+                android.util.Log.d(
+                    "ForegroundAppDetector",
+                    "Detected ${launcherPackageNames.size} launcher packages: $launcherPackageNames"
+                )
+            }.mapLeft { e ->
+                android.util.Log.e("ForegroundAppDetector", "Failed to detect launcher packages", e)
+            }
+        }
+    }
+
+    /**
+     * Apply the user's global orientation preference
+     * Used when entering launcher or when no app-specific setting exists
+     */
+    private fun applyGlobalOrientation() {
+        val prefManager = preferencesManager
+        val dispManager = displayManager
+
+        if (prefManager == null || dispManager == null) {
+            android.util.Log.w("ForegroundAppDetector", "Service not ready, cannot apply global orientation")
+            return
+        }
+
+        serviceScope.launch {
+            Either.catch {
+                val globalOrientation = prefManager.globalOrientation.first()
+
+                android.util.Log.d(
+                    "ForegroundAppDetector",
+                    "Applying global orientation: ${globalOrientation.displayName}"
+                )
+
+                // Apply to all displays
+                dispManager.displays?.forEach { display ->
+                    sendOrientationIntent(globalOrientation.value, display.displayId)
+                }
+
+                _currentAppliedOrientation.value = globalOrientation
+            }.mapLeft { e ->
+                android.util.Log.e("ForegroundAppDetector", "Failed to apply global orientation", e)
+            }
+        }
+    }
+
     override fun onInterrupt() {
         // Required override
         android.util.Log.d("ForegroundAppDetector", "Service interrupted")
@@ -232,6 +369,7 @@ class ForegroundAppDetectorService : AccessibilityService() {
         android.util.Log.d("ForegroundAppDetector", "Service destroyed")
         serviceScope.cancel()
         repository = null
+        preferencesManager = null
         super.onDestroy()
     }
 }
