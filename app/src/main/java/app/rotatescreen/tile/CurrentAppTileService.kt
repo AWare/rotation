@@ -66,13 +66,28 @@ class CurrentAppTileService : TileService() {
             cycleOrientation(packageName)
         } else {
             android.util.Log.w("CurrentAppTileService", "No current app package - trying to refresh")
-            // Try to detect the app again
-            updateCurrentApp()
-            // Show helpful message
+
+            // Show helpful message and open settings
+            android.widget.Toast.makeText(
+                this,
+                "Grant Usage Access permission to detect current app",
+                android.widget.Toast.LENGTH_LONG
+            ).show()
+
+            // Open Usage Access settings
+            try {
+                val intent = Intent(android.provider.Settings.ACTION_USAGE_ACCESS_SETTINGS).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                }
+                startActivity(intent)
+            } catch (e: Exception) {
+                android.util.Log.e("CurrentAppTileService", "Failed to open Usage Access settings", e)
+            }
+
             qsTile?.apply {
                 state = Tile.STATE_INACTIVE
-                label = "Tap to open app"
-                contentDescription = "No foreground app detected. Grant Usage Access permission in app settings."
+                label = "Needs Usage Access"
+                contentDescription = "Grant Usage Access permission to detect current app"
                 updateTile()
             }
         }
