@@ -2,7 +2,9 @@ package app.rotatescreen.tile
 
 import android.app.ActivityManager
 import android.app.PendingIntent
+import android.content.Context
 import android.content.Intent
+import android.hardware.display.DisplayManager
 import android.os.Build
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
@@ -12,6 +14,7 @@ import app.rotatescreen.domain.model.AppOrientationSetting
 import app.rotatescreen.domain.model.ScreenOrientation
 import app.rotatescreen.domain.model.TargetScreen
 import app.rotatescreen.service.OrientationControlService
+import app.rotatescreen.service.OrientationSelectorOverlayService
 import app.rotatescreen.ui.MainActivity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -27,13 +30,9 @@ class CurrentAppTileService : TileService() {
     private var serviceScope: CoroutineScope? = null
     private var repository: OrientationRepository? = null
     private var currentAppPackage: String? = null
-
-    private val orientationCycle = listOf(
-        ScreenOrientation.Unspecified,
-        ScreenOrientation.Portrait,
-        ScreenOrientation.Landscape,
-        ScreenOrientation.Sensor
-    )
+    private val displayManager by lazy {
+        getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -56,19 +55,7 @@ class CurrentAppTileService : TileService() {
         if (packageName != null) {
             serviceScope?.launch {
                 try {
-                    android.util.Log.d("CurrentAppTileService", "Processing click for $packageName")
-
-                    // Get current setting (use first one or default)
-                    val currentSettingList = repository?.getSetting(packageName)?.getOrNull()
-                    val currentSetting = currentSettingList?.firstOrNull()
-                    val currentOrientation = currentSetting?.orientation ?: ScreenOrientation.Unspecified
-
-                    // Find next orientation
-                    val currentIndex = orientationCycle.indexOf(currentOrientation)
-                    val nextIndex = (currentIndex + 1) % orientationCycle.size
-                    val nextOrientation = orientationCycle[nextIndex]
-
-                    android.util.Log.d("CurrentAppTileService", "Cycling from ${currentOrientation.displayName} to ${nextOrientation.displayName}")
+                    android.util.Log.d("CurrentAppTileService", "Showing orientation selector for $packageName")
 
                     // Get app name
                     val appName = try {
@@ -78,28 +65,19 @@ class CurrentAppTileService : TileService() {
                         packageName
                     }
 
-                    // Save setting
-                    val newSetting = AppOrientationSetting.create(
-                        packageName = packageName,
-                        appName = appName,
-                        orientation = nextOrientation,
-                        targetScreen = currentSetting?.targetScreen ?: TargetScreen.AllScreens
-                    )
-                    repository?.saveSetting(newSetting)
-                    android.util.Log.d("CurrentAppTileService", "Saved setting for $appName")
+                    // Detect which displays are available (for now, show on all displays)
+                    val displayIds = displayManager.displays.map { it.displayId }.toIntArray()
 
-                    // Apply the orientation immediately
-                    val targetScreen = currentSetting?.targetScreen ?: TargetScreen.AllScreens
-                    val intent = Intent(this@CurrentAppTileService, OrientationControlService::class.java).apply {
-                        action = OrientationControlService.ACTION_SET_ORIENTATION
-                        putExtra(OrientationControlService.EXTRA_ORIENTATION, nextOrientation.value)
-                        putExtra(OrientationControlService.EXTRA_SCREEN_ID, targetScreen.id)
+                    // Launch the orientation selector overlay
+                    val intent = Intent(this@CurrentAppTileService, OrientationSelectorOverlayService::class.java).apply {
+                        action = OrientationSelectorOverlayService.ACTION_SHOW_SELECTOR
+                        putExtra(OrientationSelectorOverlayService.EXTRA_PACKAGE_NAME, packageName)
+                        putExtra(OrientationSelectorOverlayService.EXTRA_APP_NAME, appName)
+                        putExtra(OrientationSelectorOverlayService.EXTRA_DISPLAY_IDS, displayIds)
                     }
                     startService(intent)
-                    android.util.Log.d("CurrentAppTileService", "Sent intent to apply orientation")
 
-                    // Update tile
-                    updateTileForApp(packageName, appName, nextOrientation)
+                    android.util.Log.d("CurrentAppTileService", "Launched orientation selector overlay")
                 } catch (e: Exception) {
                     android.util.Log.e("CurrentAppTileService", "Error in onClick", e)
                     qsTile?.apply {

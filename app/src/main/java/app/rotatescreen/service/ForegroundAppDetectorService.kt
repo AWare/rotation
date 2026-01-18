@@ -25,6 +25,7 @@ class ForegroundAppDetectorService : AccessibilityService() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private lateinit var repository: OrientationRepository
     private var currentPackageName: String? = null
+    private var previousPackageName: String? = null
     private val displayManager by lazy {
         getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
     }
@@ -41,8 +42,48 @@ class ForegroundAppDetectorService : AccessibilityService() {
         val packageName = event.packageName?.toString() ?: return
         if (packageName == currentPackageName) return
 
+        // App switched - reset orientation for previous app if it had per-screen settings
+        if (previousPackageName != null && previousPackageName != packageName) {
+            resetOrientationForApp(previousPackageName!!)
+        }
+
+        previousPackageName = currentPackageName
         currentPackageName = packageName
         applyOrientationForApp(packageName)
+    }
+
+    private fun resetOrientationForApp(packageName: String) {
+        serviceScope.launch {
+            try {
+                android.util.Log.d("ForegroundAppDetector", "Resetting orientation for backgrounded app: $packageName")
+
+                // Get all settings for this app
+                val settings = repository.getSetting(packageName).getOrNull() ?: return@launch
+
+                // Only reset if app has per-screen settings (not "All Screens")
+                val hasPerScreenSettings = settings.any { it.targetScreen.id != -1 }
+
+                if (hasPerScreenSettings) {
+                    // Reset to system default (Unspecified/Auto)
+                    val displays = displayManager.displays
+                    displays.forEach { display ->
+                        val intent = Intent(
+                            this@ForegroundAppDetectorService,
+                            OrientationControlService::class.java
+                        ).apply {
+                            action = OrientationControlService.ACTION_SET_ORIENTATION
+                            putExtra(OrientationControlService.EXTRA_ORIENTATION, ScreenOrientation.Unspecified.value)
+                            putExtra(OrientationControlService.EXTRA_SCREEN_ID, display.displayId)
+                        }
+                        startService(intent)
+                    }
+
+                    android.util.Log.d("ForegroundAppDetector", "Reset orientation for $packageName")
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("ForegroundAppDetector", "Failed to reset orientation for $packageName", e)
+            }
+        }
     }
 
     private fun applyOrientationForApp(packageName: String) {
