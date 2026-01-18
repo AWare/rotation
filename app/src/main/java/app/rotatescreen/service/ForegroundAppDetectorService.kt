@@ -72,31 +72,23 @@ class ForegroundAppDetectorService : AccessibilityService() {
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        // FP: Pure validation
-        val packageName = extractPackageName(event) ?: return
+        // FP: Pure validation using helper functions
+        val packageName = ForegroundAppDetectorHelpers.extractPackageName(event) ?: return
 
         // FP: Debouncing - ignore rapid-fire events
         val currentTime = System.currentTimeMillis()
-        if (currentTime - lastEventTimestamp < debounceDelayMs) {
+        if (ForegroundAppDetectorHelpers.shouldDebounce(currentTime, lastEventTimestamp, debounceDelayMs)) {
             android.util.Log.d("ForegroundAppDetector", "Debounced event for $packageName")
             return
         }
         lastEventTimestamp = currentTime
 
         // FP: Avoid processing if package unchanged
-        if (packageName == _currentPackageName.value) return
+        if (ForegroundAppDetectorHelpers.isSamePackage(packageName, _currentPackageName.value)) return
 
         // FP: Immutable state transition
         handleAppSwitch(packageName)
     }
-
-    /**
-     * FP: Pure function to extract package name from event
-     */
-    private fun extractPackageName(event: AccessibilityEvent?): String? =
-        if (event?.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
-            event.packageName?.toString()
-        } else null
 
     /**
      * FP: Immutable state transition for app switch
@@ -105,15 +97,18 @@ class ForegroundAppDetectorService : AccessibilityService() {
     @Synchronized
     private fun handleAppSwitch(newPackageName: String) {
         val previous = _currentPackageName.value
-        val isEnteringLauncher = launcherPackages.value.contains(newPackageName)
-        val isLeavingApp = previous != null && previous != newPackageName
+        val launchers = launcherPackages.value
+
+        // FP: Use pure helper functions for state checks
+        val isEnteringLauncher = ForegroundAppDetectorHelpers.isLauncherPackage(newPackageName, launchers)
+        val leaving = ForegroundAppDetectorHelpers.isLeavingApp(previous, newPackageName)
 
         // Atomic state transition
         _previousPackageName.value = previous
         _currentPackageName.value = newPackageName
 
         // Side effects in separate functions
-        if (isLeavingApp) {
+        if (leaving) {
             previous?.let { prevPkg ->
                 // Better exit detection: always reset when leaving an app
                 android.util.Log.d(
@@ -157,10 +152,8 @@ class ForegroundAppDetectorService : AccessibilityService() {
                 // Get all settings for this app
                 val settings = repo.getSetting(packageName).getOrNull() ?: return@catch
 
-                // Check if app had custom orientation applied
-                val hadCustomOrientation = settings.any { it.enabled }
-
-                if (hadCustomOrientation) {
+                // FP: Use pure helper function to check custom orientation
+                if (ForegroundAppDetectorHelpers.hasCustomOrientation(settings)) {
                     // Get the user's global orientation preference
                     val globalOrientation = prefManager.globalOrientation.first()
 
