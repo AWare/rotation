@@ -19,7 +19,8 @@ import app.rotatescreen.ui.components.*
 @Composable
 fun MainScreen(
     viewModel: MainViewModel,
-    onNavigateToPerApp: () -> Unit
+    onNavigateToPerApp: () -> Unit,
+    onNavigateToLogs: () -> Unit = {}
 ) {
     val state by viewModel.state.collectAsState()
     val availableScreens by viewModel.availableScreens.collectAsState()
@@ -136,6 +137,30 @@ fun MainScreen(
                 ) {
                     RiscOsLabel(
                         text = "Configure Apps ▶",
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+
+        // Logs button
+        RiscOsWindow(
+            title = "Diagnostics",
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                RiscOsLabel(
+                    text = "View app logs for troubleshooting.",
+                    maxLines = 2
+                )
+
+                RiscOsButton(
+                    onClick = onNavigateToLogs,
+                    modifier = Modifier.fillMaxWidth(),
+                    backgroundColor = RiscOsColors.actionYellow.copy(alpha = 0.3f)
+                ) {
+                    RiscOsLabel(
+                        text = "View Logs ▶",
                         fontWeight = FontWeight.Bold
                     )
                 }

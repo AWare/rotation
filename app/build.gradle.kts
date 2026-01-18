@@ -1,3 +1,6 @@
+import java.util.Properties
+import java.io.FileInputStream
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -21,8 +24,31 @@ android {
         }
     }
 
+    signingConfigs {
+        create("release") {
+            // Use release keystore if available, otherwise fall back to debug
+            val keystorePropertiesFile = rootProject.file("keystore.properties")
+            if (keystorePropertiesFile.exists()) {
+                val keystoreProperties = Properties()
+                keystoreProperties.load(FileInputStream(keystorePropertiesFile))
+
+                storeFile = file(keystoreProperties.getProperty("storeFile") ?: "debug.keystore")
+                storePassword = keystoreProperties.getProperty("storePassword") ?: "android"
+                keyAlias = keystoreProperties.getProperty("keyAlias") ?: "androiddebugkey"
+                keyPassword = keystoreProperties.getProperty("keyPassword") ?: "android"
+            } else {
+                // Fall back to debug signing for local builds and CI without secrets
+                storeFile = file("${System.getProperty("user.home")}/.android/debug.keystore")
+                storePassword = "android"
+                keyAlias = "androiddebugkey"
+                keyPassword = "android"
+            }
+        }
+    }
+
     buildTypes {
         release {
+            signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),

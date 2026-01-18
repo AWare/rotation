@@ -64,6 +64,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         else apps.filter { it.appName.contains(query, ignoreCase = true) }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    private val displayListener = object : DisplayManager.DisplayListener {
+        override fun onDisplayAdded(displayId: Int) {
+            android.util.Log.d("MainViewModel", "Display added: $displayId")
+            loadAvailableDisplays()
+        }
+
+        override fun onDisplayRemoved(displayId: Int) {
+            android.util.Log.d("MainViewModel", "Display removed: $displayId")
+            loadAvailableDisplays()
+            handleDisplayDisconnected(displayId)
+        }
+
+        override fun onDisplayChanged(displayId: Int) {
+            android.util.Log.d("MainViewModel", "Display changed: $displayId")
+            loadAvailableDisplays()
+        }
+    }
+
     init {
         val database = RotationDatabase.getInstance(context)
         repository = OrientationRepository(database.appOrientationDao())
@@ -73,6 +91,92 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         loadInstalledApps()
         loadAvailableDisplays()
         checkPermissions()
+
+        // Register display listener for hot-swap detection
+        displayManager.registerDisplayListener(displayListener, null)
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        // Unregister display listener
+        displayManager.unregisterDisplayListener(displayListener)
+    }
+
+    private fun handleDisplayDisconnected(displayId: Int) {
+        viewModelScope.launch {
+            // Clear selected screen if the disconnected display was selected
+            if (_selectedGlobalScreen.value.id == displayId) {
+                _selectedGlobalScreen.value = TargetScreen.AllScreens
+            }
+
+            // Update app screen selections
+            _selectedAppScreens.update { current ->
+                current.filterValues { it.id != displayId }
+            }
+
+            // Optionally: clean up orphaned settings for this display
+            // Note: We keep them by default for when the display reconnects
+            // Uncomment to auto-delete orphaned settings:
+            // repository.deleteSettingsForDisplay(displayId)
+        }
+    }
+
+    /**
+     * Clean up all orphaned settings for displays that no longer exist
+     */
+    fun cleanupOrphanedSettings() {
+        viewModelScope.launch {
+            try {
+                val currentDisplayIds = displayManager.displays.map { it.displayId }.toSet()
+                val allSettings = repository.getAllSettings().firstOrNull() ?: return@launch
+
+                allSettings.forEach { setting ->
+                    val displayId = setting.targetScreen.id
+                    // Skip "All Screens" setting (id = -1) and settings for existing displays
+                    if (displayId != -1 && !currentDisplayIds.contains(displayId)) {
+                        android.util.Log.d(
+                            "MainViewModel",
+                            "Cleaning up orphaned setting for ${setting.packageName} on display $displayId"
+                        )
+                        repository.deleteSettingForDisplay(setting.packageName, displayId)
+                    }
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("MainViewModel", "Failed to cleanup orphaned settings", e)
+            }
+        }
+    }
+
+    /**
+     * Get effective orientation for an app using smart fallback
+     */
+    suspend fun getEffectiveOrientationForApp(packageName: String, displayId: Int): ScreenOrientation? {
+        try {
+            val display = displayManager.displays.find { it.displayId == displayId }
+                ?: return null
+
+            val metrics = android.util.DisplayMetrics()
+            display.getMetrics(metrics)
+            val aspectRatio = when {
+                metrics.heightPixels > metrics.widthPixels -> AspectRatio.PORTRAIT
+                metrics.widthPixels.toFloat() / metrics.heightPixels.toFloat() < 1.3f -> AspectRatio.SQUARE
+                else -> AspectRatio.LANDSCAPE
+            }
+
+            val availableDisplayIds = displayManager.displays.map { it.displayId }.toSet()
+
+            val setting = repository.getEffectiveOrientation(
+                packageName = packageName,
+                currentDisplayId = displayId,
+                currentAspectRatio = aspectRatio,
+                availableDisplayIds = availableDisplayIds
+            )
+
+            return setting?.orientation
+        } catch (e: Exception) {
+            android.util.Log.e("MainViewModel", "Failed to get effective orientation", e)
+            return null
+        }
     }
 
     private fun observeState() {
@@ -401,10 +505,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun flashScreen(targetScreen: TargetScreen) {
         try {
             val currentPalette = app.rotatescreen.ui.components.RiscOsColors.currentPalette
+
+            // Get display information if specific screen
+            var displayInfo = ""
+            if (targetScreen is TargetScreen.SpecificScreen) {
+                val display = displayManager.displays.find { it.displayId == targetScreen.id }
+                if (display != null) {
+                    val metrics = android.util.DisplayMetrics()
+                    display.getMetrics(metrics)
+                    displayInfo = "${metrics.widthPixels}×${metrics.heightPixels} • ${metrics.densityDpi}dpi"
+                }
+            }
+
             val intent = Intent(context, OrientationControlService::class.java).apply {
                 action = "com.aware.rotation.action.FLASH_SCREEN"
                 putExtra(OrientationControlService.EXTRA_SCREEN_ID, targetScreen.id)
                 putExtra("SCREEN_NAME", targetScreen.displayName)
+                putExtra("DISPLAY_INFO", displayInfo)
+                putExtra("ASPECT_RATIO", targetScreen.aspectRatio.name)
                 putExtra("PALETTE_NAME", currentPalette.name)
                 putExtra("COLOR_1", currentPalette.actionBlue.value.toLong())
                 putExtra("COLOR_2", currentPalette.actionGreen.value.toLong())

@@ -100,6 +100,12 @@
             android:enabled="true"
             android:exported="false" />
 
+        <!-- Orientation Selector Overlay Service -->
+        <service
+            android:name=".service.OrientationSelectorOverlayService"
+            android:enabled="true"
+            android:exported="false" />
+
     </application>
 
 </manifest>

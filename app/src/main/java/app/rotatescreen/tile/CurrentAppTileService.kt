@@ -2,7 +2,9 @@ package app.rotatescreen.tile
 
 import android.app.ActivityManager
 import android.app.PendingIntent
+import android.content.Context
 import android.content.Intent
+import android.hardware.display.DisplayManager
 import android.os.Build
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
@@ -12,6 +14,7 @@ import app.rotatescreen.domain.model.AppOrientationSetting
 import app.rotatescreen.domain.model.ScreenOrientation
 import app.rotatescreen.domain.model.TargetScreen
 import app.rotatescreen.service.OrientationControlService
+import app.rotatescreen.service.OrientationSelectorOverlayService
 import app.rotatescreen.ui.MainActivity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -27,12 +30,17 @@ class CurrentAppTileService : TileService() {
     private var serviceScope: CoroutineScope? = null
     private var repository: OrientationRepository? = null
     private var currentAppPackage: String? = null
+    private val displayManager by lazy {
+        getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
+    }
 
     private val orientationCycle = listOf(
         ScreenOrientation.Unspecified,
         ScreenOrientation.Portrait,
         ScreenOrientation.Landscape,
-        ScreenOrientation.Sensor
+        ScreenOrientation.Sensor,
+        ScreenOrientation.ReversePortrait,
+        ScreenOrientation.ReverseLandscape
     )
 
     override fun onCreate() {
@@ -54,114 +62,179 @@ class CurrentAppTileService : TileService() {
         android.util.Log.d("CurrentAppTileService", "onClick: packageName=$packageName")
 
         if (packageName != null) {
-            serviceScope?.launch {
-                try {
-                    android.util.Log.d("CurrentAppTileService", "Processing click for $packageName")
-
-                    // Get current setting
-                    val currentSetting = repository?.getSetting(packageName)?.getOrNull()
-                    val currentOrientation = currentSetting?.orientation ?: ScreenOrientation.Unspecified
-
-                    // Find next orientation
-                    val currentIndex = orientationCycle.indexOf(currentOrientation)
-                    val nextIndex = (currentIndex + 1) % orientationCycle.size
-                    val nextOrientation = orientationCycle[nextIndex]
-
-                    android.util.Log.d("CurrentAppTileService", "Cycling from ${currentOrientation.displayName} to ${nextOrientation.displayName}")
-
-                    // Get app name
-                    val appName = try {
-                        packageManager.getApplicationInfo(packageName, 0)
-                            .loadLabel(packageManager).toString()
-                    } catch (e: Exception) {
-                        packageName
-                    }
-
-                    // Save setting
-                    val newSetting = AppOrientationSetting.create(
-                        packageName = packageName,
-                        appName = appName,
-                        orientation = nextOrientation,
-                        targetScreen = currentSetting?.targetScreen ?: TargetScreen.AllScreens
-                    )
-                    repository?.saveSetting(newSetting)
-                    android.util.Log.d("CurrentAppTileService", "Saved setting for $appName")
-
-                    // Apply the orientation immediately
-                    val targetScreen = currentSetting?.targetScreen ?: TargetScreen.AllScreens
-                    val intent = Intent(this@CurrentAppTileService, OrientationControlService::class.java).apply {
-                        action = OrientationControlService.ACTION_SET_ORIENTATION
-                        putExtra(OrientationControlService.EXTRA_ORIENTATION, nextOrientation.value)
-                        putExtra(OrientationControlService.EXTRA_SCREEN_ID, targetScreen.id)
-                    }
-                    startService(intent)
-                    android.util.Log.d("CurrentAppTileService", "Sent intent to apply orientation")
-
-                    // Update tile
-                    updateTileForApp(packageName, appName, nextOrientation)
-                } catch (e: Exception) {
-                    android.util.Log.e("CurrentAppTileService", "Error in onClick", e)
-                    qsTile?.apply {
-                        state = Tile.STATE_INACTIVE
-                        label = "Error: ${e.message}"
-                        updateTile()
-                    }
-                }
-            }
+            // Just cycle through orientations and save
+            cycleOrientation(packageName)
         } else {
             android.util.Log.w("CurrentAppTileService", "No current app package - trying to refresh")
-            // Try to detect the app again
-            updateCurrentApp()
-            // Show helpful message
+
+            // Show helpful message and open settings
+            android.widget.Toast.makeText(
+                this,
+                "Grant Usage Access permission to detect current app",
+                android.widget.Toast.LENGTH_LONG
+            ).show()
+
+            // Open Usage Access settings
+            try {
+                val intent = Intent(android.provider.Settings.ACTION_USAGE_ACCESS_SETTINGS).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                }
+                startActivity(intent)
+            } catch (e: Exception) {
+                android.util.Log.e("CurrentAppTileService", "Failed to open Usage Access settings", e)
+            }
+
             qsTile?.apply {
                 state = Tile.STATE_INACTIVE
-                label = "Tap to open app"
-                contentDescription = "No foreground app detected. Grant Usage Access permission in app settings."
+                label = "Needs Usage Access"
+                contentDescription = "Grant Usage Access permission to detect current app"
                 updateTile()
             }
         }
     }
 
-    private fun updateCurrentApp() {
-        val activityManager = getSystemService(ACTIVITY_SERVICE)
-        if (activityManager is ActivityManager) {
-            val packageName = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1) {
-                val usageService = getSystemService(USAGE_STATS_SERVICE)
-                if (usageService is android.app.usage.UsageStatsManager) {
-                    val endTime = System.currentTimeMillis()
-                    val startTime = endTime - 1000 * 10 // Last 10 seconds
-                    usageService.queryUsageStats(
-                        android.app.usage.UsageStatsManager.INTERVAL_DAILY,
-                        startTime,
-                        endTime
-                    )?.maxByOrNull { it.lastTimeUsed }?.packageName
-                } else null
-            } else null
+    private fun cycleOrientation(packageName: String) {
+        serviceScope?.launch {
+            try {
+                android.util.Log.d("CurrentAppTileService", "Cycling orientation for $packageName")
 
-            if (packageName != null && packageName != this.packageName) {
-                currentAppPackage = packageName
-                serviceScope?.launch {
-                    val currentSetting = repository?.getSetting(packageName)?.getOrNull()
-                    val appName = try {
-                        packageManager.getApplicationInfo(packageName, 0)
-                            .loadLabel(packageManager).toString()
-                    } catch (e: Exception) {
-                        packageName
-                    }
-                    updateTileForApp(
-                        packageName,
-                        appName,
-                        currentSetting?.orientation ?: ScreenOrientation.Unspecified
-                    )
+                // Get current setting (use first one or default)
+                val currentSettingList = repository?.getSetting(packageName)?.getOrNull()
+                val currentSetting = currentSettingList?.firstOrNull()
+                val currentOrientation = currentSetting?.orientation ?: ScreenOrientation.Unspecified
+
+                // Find next orientation
+                val currentIndex = orientationCycle.indexOf(currentOrientation)
+                val nextIndex = (currentIndex + 1) % orientationCycle.size
+                val nextOrientation = orientationCycle[nextIndex]
+
+                android.util.Log.d("CurrentAppTileService", "Cycling from ${currentOrientation.displayName} to ${nextOrientation.displayName}")
+
+                // Get app name
+                val appName = try {
+                    packageManager.getApplicationInfo(packageName, 0)
+                        .loadLabel(packageManager).toString()
+                } catch (e: Exception) {
+                    packageName
                 }
-            } else {
+
+                // Get target screen (use first display if no setting)
+                val targetScreen = currentSetting?.targetScreen ?: TargetScreen.AllScreens
+
+                // Save setting
+                val newSetting = AppOrientationSetting.create(
+                    packageName = packageName,
+                    appName = appName,
+                    orientation = nextOrientation,
+                    targetScreen = targetScreen
+                )
+                repository?.saveSetting(newSetting)
+                android.util.Log.d("CurrentAppTileService", "Saved setting for $appName: ${nextOrientation.displayName}")
+
+                // Apply the orientation immediately
+                val intent = Intent(this@CurrentAppTileService, OrientationControlService::class.java).apply {
+                    action = OrientationControlService.ACTION_SET_ORIENTATION
+                    putExtra(OrientationControlService.EXTRA_ORIENTATION, nextOrientation.value)
+                    putExtra(OrientationControlService.EXTRA_SCREEN_ID, targetScreen.id)
+                }
+                startService(intent)
+                android.util.Log.d("CurrentAppTileService", "Applied orientation")
+
+                // Update tile
+                updateTileForApp(packageName, appName, nextOrientation)
+
+                // Show toast feedback
+                android.widget.Toast.makeText(
+                    this@CurrentAppTileService,
+                    "$appName: ${nextOrientation.displayName}",
+                    android.widget.Toast.LENGTH_SHORT
+                ).show()
+            } catch (e: Exception) {
+                android.util.Log.e("CurrentAppTileService", "Error cycling orientation", e)
                 qsTile?.apply {
                     state = Tile.STATE_INACTIVE
-                    label = "Current App"
-                    contentDescription = "No foreground app detected"
+                    label = "Error: ${e.message}"
                     updateTile()
                 }
             }
+        }
+    }
+
+    private fun updateCurrentApp() {
+        val packageName = getCurrentForegroundApp()
+        android.util.Log.d("CurrentAppTileService", "updateCurrentApp: detected packageName=$packageName")
+
+        if (packageName != null && packageName != this.packageName) {
+            currentAppPackage = packageName
+            serviceScope?.launch {
+                val currentSettingList = repository?.getSetting(packageName)?.getOrNull()
+                val currentSetting = currentSettingList?.firstOrNull()
+                val appName = try {
+                    packageManager.getApplicationInfo(packageName, 0)
+                        .loadLabel(packageManager).toString()
+                } catch (e: Exception) {
+                    packageName
+                }
+                updateTileForApp(
+                    packageName,
+                    appName,
+                    currentSetting?.orientation ?: ScreenOrientation.Unspecified
+                )
+            }
+        } else {
+            android.util.Log.w("CurrentAppTileService", "No foreground app detected (packageName=$packageName)")
+            qsTile?.apply {
+                state = Tile.STATE_INACTIVE
+                label = "Current App"
+                contentDescription = "No foreground app detected"
+                updateTile()
+            }
+        }
+    }
+
+    /**
+     * Get the current foreground app package using UsageEvents API
+     * This is more reliable than queryUsageStats for real-time detection
+     */
+    private fun getCurrentForegroundApp(): String? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP_MR1) {
+            android.util.Log.w("CurrentAppTileService", "UsageStats not available on this Android version")
+            return null
+        }
+
+        val usageStatsManager = getSystemService(USAGE_STATS_SERVICE) as? android.app.usage.UsageStatsManager
+        if (usageStatsManager == null) {
+            android.util.Log.e("CurrentAppTileService", "UsageStatsManager not available")
+            return null
+        }
+
+        try {
+            val endTime = System.currentTimeMillis()
+            val startTime = endTime - 1000 * 60 * 5 // Last 5 minutes
+
+            val usageEvents = usageStatsManager.queryEvents(startTime, endTime)
+            var lastForegroundApp: String? = null
+            var lastEventTime = 0L
+
+            while (usageEvents.hasNextEvent()) {
+                val event = android.app.usage.UsageEvents.Event()
+                usageEvents.getNextEvent(event)
+
+                // Look for MOVE_TO_FOREGROUND events
+                if (event.eventType == android.app.usage.UsageEvents.Event.ACTIVITY_RESUMED ||
+                    event.eventType == android.app.usage.UsageEvents.Event.MOVE_TO_FOREGROUND) {
+                    if (event.timeStamp > lastEventTime) {
+                        lastEventTime = event.timeStamp
+                        lastForegroundApp = event.packageName
+                    }
+                }
+            }
+
+            android.util.Log.d("CurrentAppTileService", "Detected foreground app: $lastForegroundApp (at $lastEventTime)")
+            return lastForegroundApp
+        } catch (e: Exception) {
+            android.util.Log.e("CurrentAppTileService", "Error querying usage events", e)
+            return null
         }
     }
 
