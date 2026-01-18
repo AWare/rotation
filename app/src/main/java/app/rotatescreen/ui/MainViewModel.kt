@@ -55,6 +55,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val selectedGlobalScreen: StateFlow<TargetScreen> = _selectedGlobalScreen.asStateFlow()
 
     private val _selectedAppScreens = MutableStateFlow<Map<String, TargetScreen>>(emptyMap())
+    val selectedAppScreens: StateFlow<Map<String, TargetScreen>> = _selectedAppScreens.asStateFlow()
 
     val filteredApps: StateFlow<List<InstalledApp>> = combine(
         installedApps,
@@ -411,7 +412,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun setAppTargetScreen(packageName: String, screen: TargetScreen) {
-        _selectedAppScreens.update { it + (packageName to screen) }
+        try {
+            android.util.Log.d("MainViewModel", "setAppTargetScreen: $packageName -> ${screen.displayName} (id=${screen.id})")
+            _selectedAppScreens.update { it + (packageName to screen) }
+            android.util.Log.d("MainViewModel", "Screen selection updated successfully")
+        } catch (e: Exception) {
+            android.util.Log.e("MainViewModel", "Error setting app target screen for $packageName", e)
+        }
     }
 
     fun setAppOrientation(
@@ -420,23 +427,27 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         orientation: ScreenOrientation
     ) {
         viewModelScope.launch {
-            val targetScreen = getSelectedScreenForApp(packageName)
-            android.util.Log.d("MainViewModel", "setAppOrientation: $packageName -> ${orientation.displayName} on screen ${targetScreen.displayName} (id=${targetScreen.id})")
+            try {
+                val targetScreen = getSelectedScreenForApp(packageName)
+                android.util.Log.d("MainViewModel", "setAppOrientation: $packageName -> ${orientation.displayName} on screen ${targetScreen.displayName} (id=${targetScreen.id})")
 
-            val setting = AppOrientationSetting.create(
-                packageName = packageName,
-                appName = appName,
-                orientation = orientation,
-                targetScreen = targetScreen
-            )
-            repository.saveSetting(setting)
+                val setting = AppOrientationSetting.create(
+                    packageName = packageName,
+                    appName = appName,
+                    orientation = orientation,
+                    targetScreen = targetScreen
+                )
+                repository.saveSetting(setting)
 
-            // Apply the orientation immediately
-            applyOrientation(orientation, targetScreen)
-            android.util.Log.d("MainViewModel", "Applied orientation immediately")
+                // Apply the orientation immediately
+                applyOrientation(orientation, targetScreen)
+                android.util.Log.d("MainViewModel", "Applied orientation immediately")
 
-            // Refresh app list to show updated visual state
-            loadInstalledApps()
+                // Refresh app list to show updated visual state
+                loadInstalledApps()
+            } catch (e: Exception) {
+                android.util.Log.e("MainViewModel", "Error setting app orientation for $packageName", e)
+            }
         }
     }
 

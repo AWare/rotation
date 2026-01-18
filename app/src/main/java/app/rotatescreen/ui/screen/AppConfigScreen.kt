@@ -28,14 +28,20 @@ fun AppConfigScreen(
     val state by viewModel.state.collectAsState()
     val filteredApps by viewModel.filteredApps.collectAsState()
     val availableScreens by viewModel.availableScreens.collectAsState()
+    val selectedAppScreens by viewModel.selectedAppScreens.collectAsState()
 
     val app = remember(filteredApps, packageName) {
         filteredApps.find { it.packageName == packageName }
     }
 
-    // Get the setting for the currently selected screen
-    val currentTargetScreen = viewModel.getSelectedScreenForApp(packageName)
+    // Get the setting for the currently selected screen (reactive to screen selection changes)
+    val currentTargetScreen = selectedAppScreens[packageName] ?: TargetScreen.AllScreens
     val currentSetting = state.getSettingForAppAndDisplay(packageName, currentTargetScreen.id)
+
+    // Log when values change
+    LaunchedEffect(currentTargetScreen, currentSetting) {
+        android.util.Log.d("AppConfigScreen", "Screen updated: ${currentTargetScreen.displayName} (id=${currentTargetScreen.id}), setting=${currentSetting?.orientation?.displayName}")
+    }
 
     MottledBackground(
         modifier = Modifier.fillMaxSize()
