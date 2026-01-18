@@ -32,8 +32,6 @@ class ForegroundAppDetectorService : AccessibilityService() {
 
     // FP: Use immutable state transitions via StateFlow
     private val _currentPackageName = MutableStateFlow<String?>(null)
-    private val currentPackageName: StateFlow<String?> = _currentPackageName.asStateFlow()
-
     private val _previousPackageName = MutableStateFlow<String?>(null)
 
     private val displayManager by lazy {
@@ -74,12 +72,13 @@ class ForegroundAppDetectorService : AccessibilityService() {
 
     /**
      * FP: Immutable state transition for app switch
+     * Synchronized to prevent race conditions from rapid accessibility events
      */
+    @Synchronized
     private fun handleAppSwitch(newPackageName: String) {
         val previous = _currentPackageName.value
-        val wasPrevious = _previousPackageName.value
 
-        // State transition
+        // Atomic state transition
         _previousPackageName.value = previous
         _currentPackageName.value = newPackageName
 
