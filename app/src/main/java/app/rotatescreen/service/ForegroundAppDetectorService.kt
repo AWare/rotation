@@ -8,6 +8,7 @@ import android.hardware.display.DisplayManager
 import android.view.accessibility.AccessibilityEvent
 import arrow.core.Either
 import arrow.core.raise.either
+import arrow.core.raise.ensure
 import app.rotatescreen.data.local.RotationDatabase
 import app.rotatescreen.data.preferences.PreferencesManager
 import app.rotatescreen.data.repository.OrientationRepository
@@ -194,7 +195,7 @@ class ForegroundAppDetectorService : AccessibilityService() {
         }
 
         serviceScope.launch {
-            Either.catch {
+            either {
                 // FP: Extract display info as data
                 val displayInfo = getDisplayInfo(dispManager).bind()
 
