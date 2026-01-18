@@ -9,6 +9,7 @@ import arrow.core.Either
 import app.rotatescreen.data.local.RotationDatabase
 import app.rotatescreen.data.repository.OrientationRepository
 import app.rotatescreen.domain.model.AspectRatio
+import app.rotatescreen.domain.model.ScreenOrientation
 import app.rotatescreen.domain.model.TargetScreen
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
