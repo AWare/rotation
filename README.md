@@ -1,5 +1,9 @@
 # Rotation Control
 
+> **⚠️ WARNING: This app is vibe-coded and not intended for consumption.**
+>
+> This codebase was developed through experimental "vibe coding" - an approach prioritizing aesthetic and conceptual exploration over production readiness. It may contain unconventional patterns, incomplete error handling, or undocumented behavior. Use at your own risk for educational or experimental purposes only.
+
 A minimal Android app for controlling screen orientation using functional programming with Kotlin and Arrow. Focused on simplicity, testability, and type-safe error handling.
 
 ## Features
