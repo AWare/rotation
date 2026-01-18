@@ -1,3 +1,6 @@
+import java.util.Properties
+import java.io.FileInputStream
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -26,8 +29,8 @@ android {
             // Use release keystore if available, otherwise fall back to debug
             val keystorePropertiesFile = rootProject.file("keystore.properties")
             if (keystorePropertiesFile.exists()) {
-                val keystoreProperties = java.util.Properties()
-                keystoreProperties.load(keystorePropertiesFile.inputStream())
+                val keystoreProperties = Properties()
+                keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 
                 storeFile = file(keystoreProperties.getProperty("storeFile") ?: "debug.keystore")
                 storePassword = keystoreProperties.getProperty("storePassword") ?: "android"
