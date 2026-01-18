@@ -1,9 +1,6 @@
 package app.rotatescreen.ui.components
 
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
@@ -19,8 +16,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlin.math.abs
-import kotlin.random.Random
 
 /**
  * RISC OS Color Palette
@@ -148,8 +143,7 @@ object RiscOsColors {
 }
 
 /**
- * RISC OS style mottled background texture
- * Creates a subtle stippled effect like classic RISC OS desktop
+ * RISC OS style background - solid color
  */
 @Composable
 fun MottledBackground(
@@ -158,37 +152,7 @@ fun MottledBackground(
     content: @Composable BoxScope.() -> Unit
 ) {
     Box(
-        modifier = modifier
-            .background(baseColor)
-            .then(
-                // Add subtle noise pattern overlay using drawBehind for efficiency
-                Modifier.drawBehind {
-                    val seed = 42
-                    val rng = Random(seed)
-                    val width = size.width.toInt()
-                    val height = size.height.toInt()
-
-                    // Draw sparse stipple pattern (only every 8th pixel for performance)
-                    for (x in 0 until width step 8) {
-                        for (y in 0 until height step 8) {
-                            if (rng.nextInt(10) < 3) { // Only 30% of positions
-                                val brightness = if (rng.nextBoolean()) 0.03f else -0.03f
-                                val color = Color(
-                                    red = (baseColor.red + brightness).coerceIn(0f, 1f),
-                                    green = (baseColor.green + brightness).coerceIn(0f, 1f),
-                                    blue = (baseColor.blue + brightness).coerceIn(0f, 1f),
-                                    alpha = 1f
-                                )
-                                drawRect(
-                                    color = color,
-                                    topLeft = Offset(x.toFloat(), y.toFloat()),
-                                    size = androidx.compose.ui.geometry.Size(2f, 2f)
-                                )
-                            }
-                        }
-                    }
-                }
-            )
+        modifier = modifier.background(baseColor)
     ) {
         content()
     }
