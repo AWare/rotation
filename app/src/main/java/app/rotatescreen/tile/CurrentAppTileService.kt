@@ -51,9 +51,13 @@ class CurrentAppTileService : TileService() {
         super.onClick()
 
         val packageName = currentAppPackage
+        android.util.Log.d("CurrentAppTileService", "onClick: packageName=$packageName")
+
         if (packageName != null) {
             serviceScope?.launch {
                 try {
+                    android.util.Log.d("CurrentAppTileService", "Processing click for $packageName")
+
                     // Get current setting
                     val currentSetting = repository?.getSetting(packageName)?.getOrNull()
                     val currentOrientation = currentSetting?.orientation ?: ScreenOrientation.Unspecified
@@ -62,6 +66,8 @@ class CurrentAppTileService : TileService() {
                     val currentIndex = orientationCycle.indexOf(currentOrientation)
                     val nextIndex = (currentIndex + 1) % orientationCycle.size
                     val nextOrientation = orientationCycle[nextIndex]
+
+                    android.util.Log.d("CurrentAppTileService", "Cycling from ${currentOrientation.displayName} to ${nextOrientation.displayName}")
 
                     // Get app name
                     val appName = try {
@@ -79,14 +85,17 @@ class CurrentAppTileService : TileService() {
                         targetScreen = currentSetting?.targetScreen ?: TargetScreen.AllScreens
                     )
                     repository?.saveSetting(newSetting)
+                    android.util.Log.d("CurrentAppTileService", "Saved setting for $appName")
 
-                    // Apply the orientation immediately (this was missing!)
+                    // Apply the orientation immediately
+                    val targetScreen = currentSetting?.targetScreen ?: TargetScreen.AllScreens
                     val intent = Intent(this@CurrentAppTileService, OrientationControlService::class.java).apply {
                         action = OrientationControlService.ACTION_SET_ORIENTATION
                         putExtra(OrientationControlService.EXTRA_ORIENTATION, nextOrientation.value)
-                        putExtra(OrientationControlService.EXTRA_SCREEN_ID, (currentSetting?.targetScreen ?: TargetScreen.AllScreens).id)
+                        putExtra(OrientationControlService.EXTRA_SCREEN_ID, targetScreen.id)
                     }
                     startService(intent)
+                    android.util.Log.d("CurrentAppTileService", "Sent intent to apply orientation")
 
                     // Update tile
                     updateTileForApp(packageName, appName, nextOrientation)
@@ -94,15 +103,20 @@ class CurrentAppTileService : TileService() {
                     android.util.Log.e("CurrentAppTileService", "Error in onClick", e)
                     qsTile?.apply {
                         state = Tile.STATE_INACTIVE
-                        label = "Error"
+                        label = "Error: ${e.message}"
                         updateTile()
                     }
                 }
             }
         } else {
+            android.util.Log.w("CurrentAppTileService", "No current app package - trying to refresh")
+            // Try to detect the app again
+            updateCurrentApp()
+            // Show helpful message
             qsTile?.apply {
                 state = Tile.STATE_INACTIVE
-                label = "No app detected"
+                label = "Tap to open app"
+                contentDescription = "No foreground app detected. Grant Usage Access permission in app settings."
                 updateTile()
             }
         }
