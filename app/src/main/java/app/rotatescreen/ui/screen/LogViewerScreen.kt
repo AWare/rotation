@@ -187,6 +187,8 @@ fun LogEntryItem(log: LogEntry) {
 private fun collectLogs(): List<LogEntry> {
     val logs = mutableListOf<LogEntry>()
     var process: Process? = null
+    var inputReader: BufferedReader? = null
+    var errorReader: BufferedReader? = null
 
     try {
         // Run logcat command filtered for rotation-related tags
@@ -201,30 +203,54 @@ private fun collectLogs(): List<LogEntry> {
                 "CurrentAppTileService:*",
                 "ForegroundAppDetector:*",
                 "MainViewModel:*",
+                "ScreenSelector:*",
+                "AppConfigScreen:*",
                 "*:S" // Silence everything else
             )
         )
 
-        val reader = BufferedReader(InputStreamReader(process.inputStream))
-        try {
-            reader.useLines { lines ->
-                lines.forEach { line ->
-                    parseLogLine(line)?.let { logs.add(it) }
-                }
+        // Read both stdout and stderr to prevent blocking
+        inputReader = BufferedReader(InputStreamReader(process.inputStream))
+        errorReader = BufferedReader(InputStreamReader(process.errorStream))
+
+        // Consume error stream in background to prevent blocking
+        Thread {
+            try {
+                errorReader.useLines { it.forEach { } }  // Discard error output
+            } catch (e: Exception) {
+                android.util.Log.e("LogViewerScreen", "Error reading error stream", e)
             }
-        } finally {
-            reader.close()
+        }.start()
+
+        // Read stdout
+        inputReader.useLines { lines ->
+            lines.forEach { line ->
+                parseLogLine(line)?.let { logs.add(it) }
+            }
         }
 
         // Wait for process to complete (with timeout)
-        process.waitFor(2, java.util.concurrent.TimeUnit.SECONDS)
+        if (!process.waitFor(2, java.util.concurrent.TimeUnit.SECONDS)) {
+            android.util.Log.w("LogViewerScreen", "Process timeout - forcibly destroying")
+            process.destroyForcibly()
+        }
     } catch (e: Exception) {
         android.util.Log.e("LogViewerScreen", "Error collecting logs", e)
         // Don't add error entry to avoid cluttering the UI
     } finally {
-        // Always destroy the process
+        // Close all streams and destroy process
         try {
-            process?.destroy()
+            inputReader?.close()
+        } catch (e: Exception) {
+            android.util.Log.e("LogViewerScreen", "Error closing input reader", e)
+        }
+        try {
+            errorReader?.close()
+        } catch (e: Exception) {
+            android.util.Log.e("LogViewerScreen", "Error closing error reader", e)
+        }
+        try {
+            process?.destroyForcibly()
         } catch (e: Exception) {
             android.util.Log.e("LogViewerScreen", "Error destroying process", e)
         }

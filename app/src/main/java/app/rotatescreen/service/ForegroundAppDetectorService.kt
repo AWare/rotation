@@ -44,8 +44,10 @@ class ForegroundAppDetectorService : AccessibilityService() {
         if (packageName == currentPackageName) return
 
         // App switched - reset orientation for previous app if it had per-screen settings
-        if (previousPackageName != null && previousPackageName != packageName) {
-            resetOrientationForApp(previousPackageName!!)
+        previousPackageName?.let { prevPkg ->
+            if (prevPkg != packageName) {
+                resetOrientationForApp(prevPkg)
+            }
         }
 
         previousPackageName = currentPackageName

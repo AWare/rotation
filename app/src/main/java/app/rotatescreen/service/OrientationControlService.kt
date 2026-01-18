@@ -424,18 +424,26 @@ class OrientationControlService : Service() {
             layoutParams.y = 0
 
             // Add the flash overlay
+            var viewAdded = false
             try {
                 displayWindowManager.addView(flashView, layoutParams)
+                viewAdded = true
                 Log.d(TAG, "Flash overlay added on display $displayId")
 
                 // Wait for 500ms to give users time to see the info
                 delay(500)
-
-                // Remove the flash overlay
-                displayWindowManager.removeView(flashView)
-                Log.d(TAG, "Flash overlay removed from display $displayId")
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to flash screen on display $displayId", e)
+            } finally {
+                // Always remove the view if it was added, even if delay was cancelled
+                if (viewAdded) {
+                    try {
+                        displayWindowManager.removeView(flashView)
+                        Log.d(TAG, "Flash overlay removed from display $displayId")
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed to remove flash view from display $displayId", e)
+                    }
+                }
             }
         }.mapLeft { e ->
             Log.e(TAG, "Exception in flashScreen", e)

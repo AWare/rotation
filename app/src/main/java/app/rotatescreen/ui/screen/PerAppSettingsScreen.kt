@@ -198,11 +198,11 @@ fun PerAppSettingsScreen(
                                             fontWeight = if (app.isRecent) FontWeight.Bold else FontWeight.Normal,
                                             maxLines = 1
                                         )
-                                        if (hasSetting) {
-                                            val settingText = if (currentSettings!!.size == 1) {
-                                                "${currentSettings[0].orientation.displayName} • ${currentSettings[0].targetScreen.displayName}"
+                                        currentSettings?.takeIf { it.isNotEmpty() }?.let { settings ->
+                                            val settingText = if (settings.size == 1) {
+                                                "${settings[0].orientation.displayName} • ${settings[0].targetScreen.displayName}"
                                             } else {
-                                                "${currentSettings.size} screens configured"
+                                                "${settings.size} screens configured"
                                             }
                                             RiscOsLabel(
                                                 text = settingText,

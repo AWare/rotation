@@ -337,20 +337,26 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 // Comparative aspect ratio assignment
                 val screens = mutableListOf<TargetScreen>(TargetScreen.AllScreens)
 
-                if (displayInfos.size == 1) {
-                    // Single display: use absolute thresholds
-                    val info = displayInfos[0]
-                    val aspectRatio = when {
-                        info.height > info.width -> AspectRatio.PORTRAIT
-                        info.ratio < 1.2 -> AspectRatio.SQUARE  // Close to 1:1
-                        else -> AspectRatio.LANDSCAPE
+                when {
+                    displayInfos.isEmpty() -> {
+                        // No displays found - just use AllScreens
+                        android.util.Log.w("MainViewModel", "No displays found, using AllScreens only")
                     }
-                    screens.add(TargetScreen.SpecificScreen(info.displayId, info.name, aspectRatio))
-                } else {
-                    // Multiple displays: comparative approach
-                    val sortedByRatio = displayInfos.sortedBy { it.ratio }
-                    val minRatio = sortedByRatio.first().ratio
-                    val maxRatio = sortedByRatio.last().ratio
+                    displayInfos.size == 1 -> {
+                        // Single display: use absolute thresholds
+                        val info = displayInfos[0]
+                        val aspectRatio = when {
+                            info.height > info.width -> AspectRatio.PORTRAIT
+                            info.ratio < 1.2 -> AspectRatio.SQUARE  // Close to 1:1
+                            else -> AspectRatio.LANDSCAPE
+                        }
+                        screens.add(TargetScreen.SpecificScreen(info.displayId, info.name, aspectRatio))
+                    }
+                    else -> {
+                        // Multiple displays: comparative approach
+                        val sortedByRatio = displayInfos.sortedBy { it.ratio }
+                        val minRatio = sortedByRatio.first().ratio
+                        val maxRatio = sortedByRatio.last().ratio
                     val ratioRange = maxRatio - minRatio
 
                     displayInfos.forEach { info ->

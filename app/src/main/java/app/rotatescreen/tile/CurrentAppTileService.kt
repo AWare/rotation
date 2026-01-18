@@ -94,12 +94,25 @@ class CurrentAppTileService : TileService() {
     }
 
     private fun cycleOrientation(packageName: String) {
-        serviceScope?.launch {
+        val scope = serviceScope
+        val repo = repository
+
+        if (scope == null || repo == null) {
+            android.util.Log.e("CurrentAppTileService", "Service not initialized - scope=$scope, repo=$repo")
+            qsTile?.apply {
+                state = Tile.STATE_INACTIVE
+                label = "Not Ready"
+                updateTile()
+            }
+            return
+        }
+
+        scope.launch {
             try {
                 android.util.Log.d("CurrentAppTileService", "Cycling orientation for $packageName")
 
                 // Get current setting (use first one or default)
-                val currentSettingList = repository?.getSetting(packageName)?.getOrNull()
+                val currentSettingList = repo.getSetting(packageName).getOrNull()
                 val currentSetting = currentSettingList?.firstOrNull()
                 val currentOrientation = currentSetting?.orientation ?: ScreenOrientation.Unspecified
 
@@ -128,7 +141,7 @@ class CurrentAppTileService : TileService() {
                     orientation = nextOrientation,
                     targetScreen = targetScreen
                 )
-                repository?.saveSetting(newSetting)
+                repo.saveSetting(newSetting)
                 android.util.Log.d("CurrentAppTileService", "Saved setting for $appName: ${nextOrientation.displayName}")
 
                 // Apply the orientation immediately
@@ -164,10 +177,19 @@ class CurrentAppTileService : TileService() {
         val packageName = getCurrentForegroundApp()
         android.util.Log.d("CurrentAppTileService", "updateCurrentApp: detected packageName=$packageName")
 
+        val scope = serviceScope
+        val repo = repository
+
         if (packageName != null && packageName != this.packageName) {
             currentAppPackage = packageName
-            serviceScope?.launch {
-                val currentSettingList = repository?.getSetting(packageName)?.getOrNull()
+
+            if (scope == null || repo == null) {
+                android.util.Log.w("CurrentAppTileService", "Service not initialized in updateCurrentApp")
+                return
+            }
+
+            scope.launch {
+                val currentSettingList = repo.getSetting(packageName).getOrNull()
                 val currentSetting = currentSettingList?.firstOrNull()
                 val appName = try {
                     packageManager.getApplicationInfo(packageName, 0)

@@ -49,7 +49,20 @@ class GlobalOrientationTileService : TileService() {
     override fun onClick() {
         super.onClick()
 
-        serviceScope?.launch {
+        val scope = serviceScope
+        val manager = preferencesManager
+
+        if (scope == null || manager == null) {
+            android.util.Log.e("GlobalOrientationTile", "Service not initialized - scope=$scope, manager=$manager")
+            qsTile?.apply {
+                state = Tile.STATE_INACTIVE
+                label = "Not Ready"
+                updateTile()
+            }
+            return
+        }
+
+        scope.launch {
             try {
                 // Cycle to next orientation
                 val currentIndex = orientationCycle.indexOf(currentOrientation)
@@ -57,7 +70,7 @@ class GlobalOrientationTileService : TileService() {
                 val nextOrientation = orientationCycle[nextIndex]
 
                 // Save to preferences
-                preferencesManager?.setGlobalOrientation(nextOrientation)
+                manager.setGlobalOrientation(nextOrientation)
                 currentOrientation = nextOrientation
 
                 // Apply orientation
