@@ -200,34 +200,70 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val displays = displayManager.displays
-                val screens = mutableListOf<TargetScreen>(TargetScreen.AllScreens)
 
-                displays.forEachIndexed { index, display ->
+                // First pass: collect display info with ratios
+                data class DisplayInfo(
+                    val displayId: Int,
+                    val name: String,
+                    val width: Int,
+                    val height: Int,
+                    val ratio: Float  // Always >= 1.0 (larger dimension / smaller dimension)
+                )
+
+                val displayInfos = displays.mapIndexed { index, display ->
                     val screenName = if (index == 0) "Primary" else "Auxiliary"
-
-                    // Calculate aspect ratio with more sensitive detection
                     val metrics = android.util.DisplayMetrics()
                     display.getMetrics(metrics)
                     val width = metrics.widthPixels
                     val height = metrics.heightPixels
 
-                    // Use the larger/smaller ratio for better detection
                     val ratio = if (width > height) {
                         width.toFloat() / height.toFloat()
                     } else {
                         height.toFloat() / width.toFloat()
                     }
 
+                    DisplayInfo(display.displayId, screenName, width, height, ratio)
+                }
+
+                // Comparative aspect ratio assignment
+                val screens = mutableListOf<TargetScreen>(TargetScreen.AllScreens)
+
+                if (displayInfos.size == 1) {
+                    // Single display: use absolute thresholds
+                    val info = displayInfos[0]
                     val aspectRatio = when {
-                        // Portrait if height > width
-                        height > width * 1.05 -> AspectRatio.PORTRAIT
-                        // Square if ratio is close to 1:1 (within 5%)
-                        ratio < 1.05 -> AspectRatio.SQUARE
-                        // Otherwise landscape
+                        info.height > info.width -> AspectRatio.PORTRAIT
+                        info.ratio < 1.2 -> AspectRatio.SQUARE  // Close to 1:1
                         else -> AspectRatio.LANDSCAPE
                     }
+                    screens.add(TargetScreen.SpecificScreen(info.displayId, info.name, aspectRatio))
+                } else {
+                    // Multiple displays: comparative approach
+                    val sortedByRatio = displayInfos.sortedBy { it.ratio }
+                    val minRatio = sortedByRatio.first().ratio
+                    val maxRatio = sortedByRatio.last().ratio
+                    val ratioRange = maxRatio - minRatio
 
-                    screens.add(TargetScreen.SpecificScreen(display.displayId, screenName, aspectRatio))
+                    displayInfos.forEach { info ->
+                        val aspectRatio = when {
+                            // Portrait if height > width
+                            info.height > info.width -> AspectRatio.PORTRAIT
+                            // If there's meaningful difference between screens
+                            ratioRange > 0.15 -> {
+                                // Comparative: where does this screen fall?
+                                val positionInRange = (info.ratio - minRatio) / ratioRange
+                                when {
+                                    positionInRange > 0.6 -> AspectRatio.LANDSCAPE  // Wider end
+                                    positionInRange < 0.4 -> AspectRatio.SQUARE     // More square end
+                                    else -> AspectRatio.LANDSCAPE  // Middle defaults to landscape
+                                }
+                            }
+                            // All screens very similar - use absolute threshold
+                            else -> if (info.ratio < 1.3) AspectRatio.SQUARE else AspectRatio.LANDSCAPE
+                        }
+                        screens.add(TargetScreen.SpecificScreen(info.displayId, info.name, aspectRatio))
+                    }
                 }
 
                 _availableScreens.value = screens
