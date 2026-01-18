@@ -12,6 +12,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.rotatescreen.domain.model.ScreenOrientation
+import app.rotatescreen.domain.model.TargetScreen
 import app.rotatescreen.ui.MainViewModel
 import app.rotatescreen.ui.components.*
 
