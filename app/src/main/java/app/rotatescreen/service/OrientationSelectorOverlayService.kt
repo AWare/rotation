@@ -52,7 +52,7 @@ import kotlinx.coroutines.launch
  */
 class OrientationSelectorOverlayService : Service() {
 
-    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val displayManager by lazy { getSystemService(DisplayManager::class.java) }
     private val windowManager by lazy { getSystemService(WINDOW_SERVICE) as WindowManager }
     private lateinit var repository: OrientationRepository
@@ -70,8 +70,14 @@ class OrientationSelectorOverlayService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        val database = RotationDatabase.getInstance(applicationContext)
-        repository = OrientationRepository(database.appOrientationDao())
+        Log.d(TAG, "OrientationSelectorOverlayService onCreate()")
+        try {
+            val database = RotationDatabase.getInstance(applicationContext)
+            repository = OrientationRepository(database.appOrientationDao())
+            Log.d(TAG, "Repository initialized successfully")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error initializing repository", e)
+        }
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -124,15 +130,18 @@ class OrientationSelectorOverlayService : Service() {
             return
         }
 
-        serviceScope.launch {
+        serviceScope.launch(Dispatchers.Main) {
             try {
                 Log.d(TAG, "Showing selector for $appName on ${displayIds.size} displays")
 
                 // Remove any existing overlays first
                 dismissAllOverlays()
 
+                Log.d(TAG, "Removed existing overlays, now showing new ones")
+
                 // Show overlay on each specified display
                 displayIds.forEach { displayId ->
+                    Log.d(TAG, "Attempting to show overlay on display $displayId")
                     val display = displayManager.displays.find { it.displayId == displayId }
                     if (display != null) {
                         showOverlayOnDisplay(display.displayId, packageName, appName)
@@ -141,7 +150,17 @@ class OrientationSelectorOverlayService : Service() {
                     }
                 }
 
-                Log.d(TAG, "Successfully showed ${overlayViews.size} overlays")
+                if (overlayViews.isEmpty()) {
+                    Log.e(TAG, "No overlays were added!")
+                    android.widget.Toast.makeText(
+                        this@OrientationSelectorOverlayService,
+                        "Failed to show overlay - no displays available",
+                        android.widget.Toast.LENGTH_SHORT
+                    ).show()
+                    stopSelf()
+                } else {
+                    Log.d(TAG, "Successfully showed ${overlayViews.size} overlays")
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to show selector overlay", e)
                 android.widget.Toast.makeText(
@@ -155,59 +174,90 @@ class OrientationSelectorOverlayService : Service() {
     }
 
     private fun showOverlayOnDisplay(displayId: Int, packageName: String, appName: String) {
-        val display = displayManager.displays.find { it.displayId == displayId } ?: return
+        try {
+            Log.d(TAG, "showOverlayOnDisplay: displayId=$displayId, appName=$appName")
 
-        // Create display-specific context
-        val displayContext = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1) {
-            createDisplayContext(display)
-        } else {
-            this
-        }
+            val display = displayManager.displays.find { it.displayId == displayId }
+            if (display == null) {
+                Log.e(TAG, "Display $displayId not found")
+                return
+            }
 
-        val displayWindowManager = displayContext.getSystemService(WINDOW_SERVICE) as WindowManager
+            // Create display-specific context
+            val displayContext = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1) {
+                createDisplayContext(display)
+            } else {
+                this
+            }
 
-        // Create Compose view
-        val composeView = ComposeView(displayContext).apply {
-            setContent {
-                MaterialTheme {
-                    OrientationSelectorUI(
-                        appName = appName,
-                        onOrientationSelected = { orientation ->
-                            handleOrientationSelection(packageName, appName, orientation, displayId)
-                        },
-                        onDismiss = {
-                            dismissAllOverlays()
-                            stopSelf()
+            val displayWindowManager = displayContext.getSystemService(WINDOW_SERVICE) as WindowManager
+
+            Log.d(TAG, "Creating ComposeView for display $displayId")
+
+            // Create Compose view - must be created on main thread
+            val composeView = ComposeView(displayContext).apply {
+                try {
+                    setContent {
+                        MaterialTheme {
+                            OrientationSelectorUI(
+                                appName = appName,
+                                onOrientationSelected = { orientation ->
+                                    handleOrientationSelection(packageName, appName, orientation, displayId)
+                                },
+                                onDismiss = {
+                                    dismissAllOverlays()
+                                    stopSelf()
+                                }
+                            )
                         }
-                    )
+                    }
+                    Log.d(TAG, "ComposeView content set successfully")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error setting ComposeView content", e)
+                    throw e
                 }
             }
-        }
 
-        // Configure window layout parameters
-        val layoutParams = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.MATCH_PARENT,
-            WindowManager.LayoutParams.MATCH_PARENT,
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-            } else {
-                @Suppress("DEPRECATION")
-                WindowManager.LayoutParams.TYPE_SYSTEM_OVERLAY
-            },
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                    WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
-            PixelFormat.TRANSLUCENT
-        )
+            // Configure window layout parameters
+            val layoutParams = WindowManager.LayoutParams(
+                WindowManager.LayoutParams.MATCH_PARENT,
+                WindowManager.LayoutParams.MATCH_PARENT,
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                } else {
+                    @Suppress("DEPRECATION")
+                    WindowManager.LayoutParams.TYPE_SYSTEM_OVERLAY
+                },
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                        WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                PixelFormat.TRANSLUCENT
+            )
 
-        layoutParams.gravity = Gravity.CENTER
+            layoutParams.gravity = Gravity.CENTER
 
-        // Add the overlay
-        try {
-            displayWindowManager.addView(composeView, layoutParams)
-            overlayViews[displayId] = composeView
-            Log.d(TAG, "Selector overlay added on display $displayId")
+            Log.d(TAG, "Adding view to WindowManager for display $displayId")
+
+            // Add the overlay
+            try {
+                displayWindowManager.addView(composeView, layoutParams)
+                overlayViews[displayId] = composeView
+                Log.d(TAG, "Successfully added selector overlay to display $displayId")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to add selector overlay to WindowManager on display $displayId", e)
+                android.widget.Toast.makeText(
+                    this,
+                    "Failed to show overlay on display $displayId: ${e.message}",
+                    android.widget.Toast.LENGTH_SHORT
+                ).show()
+                throw e
+            }
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to add selector overlay on display $displayId", e)
+            Log.e(TAG, "Error in showOverlayOnDisplay for display $displayId", e)
+            android.widget.Toast.makeText(
+                this,
+                "Error showing overlay: ${e.message}",
+                android.widget.Toast.LENGTH_SHORT
+            ).show()
         }
     }
 
