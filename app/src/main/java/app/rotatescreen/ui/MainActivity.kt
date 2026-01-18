@@ -1,6 +1,7 @@
 package app.rotatescreen.ui
 
 import android.os.Bundle
+import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -15,6 +16,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import app.rotatescreen.ui.components.RiscOsColors
 import app.rotatescreen.ui.navigation.Screen
 import app.rotatescreen.ui.screen.AppConfigScreen
 import app.rotatescreen.ui.screen.MainScreen
@@ -58,6 +60,22 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         // Check permissions when returning to the app
         viewModel.checkPermissions()
+    }
+
+    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+        return when (keyCode) {
+            KeyEvent.KEYCODE_BUTTON_R1 -> {
+                // R1 button - next palette
+                RiscOsColors.nextPalette()
+                true
+            }
+            KeyEvent.KEYCODE_BUTTON_L1 -> {
+                // L1 button - previous palette
+                RiscOsColors.previousPalette()
+                true
+            }
+            else -> super.onKeyDown(keyCode, event)
+        }
     }
 
     companion object {

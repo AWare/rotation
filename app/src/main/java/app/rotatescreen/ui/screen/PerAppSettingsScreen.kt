@@ -34,23 +34,21 @@ fun PerAppSettingsScreen(
     val state by viewModel.state.collectAsState()
     val filteredApps by viewModel.filteredApps.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
-    val debugInfo by viewModel.debugInfo.collectAsState()
     val context = LocalContext.current
     val focusRequester = remember { FocusRequester() }
-
-    // Debug panel collapse state
-    var debugExpanded by remember { mutableStateOf(false) }
 
     // Check usage stats permission
     val hasUsageStatsPermission = remember { viewModel.hasUsageStatsPermission() }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(RiscOsColors.mediumGray)
-            .padding(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+    MottledBackground(
+        modifier = Modifier.fillMaxSize()
     ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
         // Title bar with back button
         Row(
             modifier = Modifier
@@ -106,25 +104,6 @@ fun PerAppSettingsScreen(
                     text = "⚠ Tap to grant Usage Stats permission",
                     fontWeight = FontWeight.Bold,
                     color = RiscOsColors.black
-                )
-            }
-        }
-
-        // DEBUG INFO PANEL - Shows app enumeration statistics
-        if (debugInfo.isNotEmpty()) {
-            RiscOsWindow(
-                title = "🔍 DEBUG INFO (Screenshot This!)",
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 200.dp) // Limit height so app list is visible
-            ) {
-                Text(
-                    text = debugInfo,
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = MaterialTheme.typography.bodySmall.fontSize,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .verticalScroll(rememberScrollState())
                 )
             }
         }
@@ -266,6 +245,7 @@ fun PerAppSettingsScreen(
                     )
                 }
             }
+        }
         }
     }
 }

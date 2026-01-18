@@ -35,14 +35,16 @@ fun AppConfigScreen(
 
     val currentSetting = state.perAppSettings[packageName]
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(RiscOsColors.mediumGray)
-            .padding(8.dp)
-            .verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+    MottledBackground(
+        modifier = Modifier.fillMaxSize()
     ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(8.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
         // Title bar with back button
         Row(
             modifier = Modifier
@@ -140,6 +142,7 @@ fun AppConfigScreen(
                     maxLines = 1
                 )
             }
+        }
         }
     }
 }

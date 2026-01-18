@@ -27,13 +27,15 @@ fun MainScreen(
 
     var showGlobalSelector by remember { mutableStateOf(false) }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(RiscOsColors.mediumGray)
-            .padding(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+    MottledBackground(
+        modifier = Modifier.fillMaxSize()
     ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
         // Title bar
         Box(
             modifier = Modifier
@@ -138,6 +140,7 @@ fun MainScreen(
                     )
                 }
             }
+        }
         }
     }
 }
