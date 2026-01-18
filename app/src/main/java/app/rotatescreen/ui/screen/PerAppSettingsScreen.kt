@@ -38,6 +38,9 @@ fun PerAppSettingsScreen(
     val context = LocalContext.current
     val focusRequester = remember { FocusRequester() }
 
+    // Debug panel collapse state
+    var debugExpanded by remember { mutableStateOf(false) }
+
     // Check usage stats permission
     val hasUsageStatsPermission = remember { viewModel.hasUsageStatsPermission() }
 
