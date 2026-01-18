@@ -11,6 +11,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import kotlinx.coroutines.isActive
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
@@ -38,22 +39,37 @@ fun LogViewerScreen(
     // Collect logs
     LaunchedEffect(isCollecting) {
         if (isCollecting) {
-            while (true) {
-                try {
-                    val newLogs = collectLogs()
-                    logs = newLogs.takeLast(500) // Keep last 500 entries
+            try {
+                while (isActive) {
+                    try {
+                        val newLogs = collectLogs()
+                        logs = newLogs.takeLast(500) // Keep last 500 entries
+                    } catch (e: Exception) {
+                        android.util.Log.e("LogViewerScreen", "Error collecting logs", e)
+                    }
                     delay(1000) // Update every second
-                } catch (e: Exception) {
-                    // Ignore errors
                 }
+            } catch (e: Exception) {
+                android.util.Log.e("LogViewerScreen", "LaunchedEffect cancelled or error", e)
             }
+        }
+    }
+
+    // Cleanup on dispose
+    DisposableEffect(Unit) {
+        onDispose {
+            isCollecting = false
         }
     }
 
     // Auto-scroll to bottom
     LaunchedEffect(logs.size) {
         if (logs.isNotEmpty()) {
-            listState.animateScrollToItem(logs.size - 1)
+            try {
+                listState.animateScrollToItem(logs.size - 1)
+            } catch (e: Exception) {
+                // Ignore scroll errors when composable is being disposed
+            }
         }
     }
 
@@ -170,14 +186,16 @@ fun LogEntryItem(log: LogEntry) {
 
 private fun collectLogs(): List<LogEntry> {
     val logs = mutableListOf<LogEntry>()
+    var process: Process? = null
 
     try {
         // Run logcat command filtered for rotation-related tags
-        val process = Runtime.getRuntime().exec(
+        process = Runtime.getRuntime().exec(
             arrayOf(
                 "logcat",
                 "-d", // Dump and exit
                 "-v", "time", // Time format
+                "-t", "500", // Last 500 lines only
                 "OrientationControl:*",
                 "OrientationSelector:*",
                 "CurrentAppTileService:*",
@@ -188,23 +206,28 @@ private fun collectLogs(): List<LogEntry> {
         )
 
         val reader = BufferedReader(InputStreamReader(process.inputStream))
-        reader.useLines { lines ->
-            lines.forEach { line ->
-                parseLogLine(line)?.let { logs.add(it) }
+        try {
+            reader.useLines { lines ->
+                lines.forEach { line ->
+                    parseLogLine(line)?.let { logs.add(it) }
+                }
             }
+        } finally {
+            reader.close()
         }
 
-        process.destroy()
+        // Wait for process to complete (with timeout)
+        process.waitFor(2, java.util.concurrent.TimeUnit.SECONDS)
     } catch (e: Exception) {
-        // Add error entry
-        logs.add(
-            LogEntry(
-                timestamp = "ERROR",
-                level = "E",
-                tag = "LogViewer",
-                message = "Failed to collect logs: ${e.message}"
-            )
-        )
+        android.util.Log.e("LogViewerScreen", "Error collecting logs", e)
+        // Don't add error entry to avoid cluttering the UI
+    } finally {
+        // Always destroy the process
+        try {
+            process?.destroy()
+        } catch (e: Exception) {
+            android.util.Log.e("LogViewerScreen", "Error destroying process", e)
+        }
     }
 
     return logs
