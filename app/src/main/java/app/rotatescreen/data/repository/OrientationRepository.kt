@@ -121,4 +121,47 @@ class OrientationRepository(
                 OrientationError.DatabaseError("Failed to clear settings: ${e.message}")
             }.bind()
         }
+
+    /**
+     * Smart display fallback: Get the best orientation setting for an app
+     * when the configured display may not be available
+     *
+     * Strategy:
+     * 1. Try exact match (packageName + displayId)
+     * 2. Fall back to similar aspect ratio display
+     * 3. Fall back to "All Screens" setting (displayId = -1)
+     * 4. Return null if no settings found
+     */
+    suspend fun getEffectiveOrientation(
+        packageName: String,
+        currentDisplayId: Int,
+        currentAspectRatio: app.rotatescreen.domain.model.AspectRatio,
+        availableDisplayIds: Set<Int>
+    ): AppOrientationSetting? {
+        // Strategy 1: Try exact match
+        val exactMatch = dao.getByPackageAndDisplay(packageName, currentDisplayId)
+        if (exactMatch != null && availableDisplayIds.contains(currentDisplayId)) {
+            return exactMatch.toDomain()
+        }
+
+        // Strategy 2: Fall back to similar aspect ratio display
+        val allSettings = dao.getByPackageName(packageName)
+        val similarAspectRatio = allSettings.firstOrNull { entity ->
+            entity.targetScreenId != -1 && // Not "All Screens"
+            entity.aspectRatioValue == currentAspectRatio.name &&
+            availableDisplayIds.contains(entity.targetScreenId)
+        }
+        if (similarAspectRatio != null) {
+            return similarAspectRatio.toDomain()
+        }
+
+        // Strategy 3: Fall back to "All Screens" setting
+        val allScreensSetting = dao.getByPackageAndDisplay(packageName, -1)
+        if (allScreensSetting != null) {
+            return allScreensSetting.toDomain()
+        }
+
+        // Strategy 4: No settings found
+        return null
+    }
 }
