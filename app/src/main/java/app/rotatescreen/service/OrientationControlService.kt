@@ -97,10 +97,18 @@ class OrientationControlService : Service() {
             }
             ACTION_FLASH_SCREEN -> {
                 val screenId = intent.getIntExtra(EXTRA_SCREEN_ID, -1)
-                Log.d(TAG, "FLASH_SCREEN: screenId=$screenId")
+                val screenName = intent.getStringExtra("SCREEN_NAME") ?: "Screen"
+                val orientation = intent.getStringExtra("ORIENTATION") ?: "Auto"
+                val color1 = intent.getLongExtra("COLOR_1", 0xFFB565FFL).toInt()
+                val color2 = intent.getLongExtra("COLOR_2", 0xFF00FF41L).toInt()
+                val color3 = intent.getLongExtra("COLOR_3", 0xFFFF8C00L).toInt()
+                val bgColor = intent.getLongExtra("BG_COLOR", 0xFF1A0D2EL).toInt()
+                val textColor = intent.getLongExtra("TEXT_COLOR", 0xFFFFFFFFL).toInt()
+
+                Log.d(TAG, "FLASH_SCREEN: screenId=$screenId, name=$screenName, orientation=$orientation")
 
                 serviceScope.launch(Dispatchers.Main) {
-                    flashScreen(screenId)
+                    flashScreen(screenId, screenName, orientation, color1, color2, color3, bgColor, textColor)
                 }
             }
         }
@@ -279,9 +287,18 @@ class OrientationControlService : Service() {
             OrientationError.DatabaseError("Failed to get displays: ${e.message}")
         }
 
-    private suspend fun flashScreen(displayId: Int) {
+    private suspend fun flashScreen(
+        displayId: Int,
+        screenName: String = "Screen",
+        orientation: String = "Auto",
+        color1: Int = android.graphics.Color.parseColor("#B565FF"),
+        color2: Int = android.graphics.Color.parseColor("#00FF41"),
+        color3: Int = android.graphics.Color.parseColor("#FF8C00"),
+        bgColor: Int = android.graphics.Color.parseColor("#1A0D2E"),
+        textColor: Int = android.graphics.Color.WHITE
+    ) {
         Either.catch {
-            Log.d(TAG, "flashScreen: displayId=$displayId")
+            Log.d(TAG, "flashScreen: displayId=$displayId, screenName=$screenName, orientation=$orientation")
 
             // Check permission first
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
@@ -306,11 +323,63 @@ class OrientationControlService : Service() {
             // Get WindowManager for this specific display
             val displayWindowManager = displayContext.getSystemService(WINDOW_SERVICE) as WindowManager
 
-            // Create a purple flash view with NGE theme
-            val flashView = View(displayContext).apply {
-                setBackgroundColor(android.graphics.Color.parseColor("#B565FF"))
-                alpha = 0.7f  // Semi-transparent for better effect
+            // Create custom flash view with diagonal stripes
+            val flashView = object : View(displayContext) {
+                private val paint = android.graphics.Paint().apply {
+                    style = android.graphics.Paint.Style.FILL
+                    isAntiAlias = false // Pixel-perfect for retro look
+                }
+
+                private val textPaint = android.graphics.Paint().apply {
+                    color = textColor
+                    textSize = 80f
+                    typeface = android.graphics.Typeface.MONOSPACE
+                    isAntiAlias = true
+                    textAlign = android.graphics.Paint.Align.CENTER
+                }
+
+                override fun onDraw(canvas: android.graphics.Canvas) {
+                    super.onDraw(canvas)
+                    val width = width.toFloat()
+                    val height = height.toFloat()
+
+                    // Draw diagonal stripe pattern
+                    val stripeWidth = 60f
+                    val colors = arrayOf(color1, color2, color3, bgColor)
+
+                    // Calculate diagonal stripes
+                    val diagonal = Math.sqrt((width * width + height * height).toDouble()).toFloat()
+                    val numStripes = (diagonal / stripeWidth).toInt() + 2
+
+                    for (i in 0 until numStripes) {
+                        paint.color = colors[i % colors.size]
+                        val offset = i * stripeWidth - diagonal / 2
+
+                        // Draw diagonal stripe from bottom-left to top-right
+                        val path = android.graphics.Path().apply {
+                            moveTo(offset, height)
+                            lineTo(offset + stripeWidth, height)
+                            lineTo(offset + stripeWidth + height, 0f)
+                            lineTo(offset + height, 0f)
+                            close()
+                        }
+                        canvas.drawPath(path, paint)
+                    }
+
+                    // Draw semi-transparent overlay for text readability
+                    paint.color = android.graphics.Color.argb(180, 0, 0, 0)
+                    canvas.drawRect(0f, height / 2 - 120f, width, height / 2 + 120f, paint)
+
+                    // Draw screen name
+                    canvas.drawText(screenName, width / 2, height / 2 - 20f, textPaint)
+
+                    // Draw orientation
+                    textPaint.textSize = 60f
+                    canvas.drawText(orientation, width / 2, height / 2 + 50f, textPaint)
+                }
             }
+
+            flashView.alpha = 0.85f
 
             // Configure window layout parameters for full-screen flash
             val layoutParams = WindowManager.LayoutParams(
@@ -337,8 +406,8 @@ class OrientationControlService : Service() {
                 displayWindowManager.addView(flashView, layoutParams)
                 Log.d(TAG, "Flash overlay added on display $displayId")
 
-                // Wait for 300ms
-                delay(300)
+                // Wait for 500ms to give users time to see the info
+                delay(500)
 
                 // Remove the flash overlay
                 displayWindowManager.removeView(flashView)

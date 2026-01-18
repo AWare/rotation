@@ -400,9 +400,28 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun flashScreen(targetScreen: TargetScreen) {
         try {
+            val currentPalette = app.rotatescreen.ui.components.RiscOsColors.currentPalette
             val intent = Intent(context, OrientationControlService::class.java).apply {
                 action = "com.aware.rotation.action.FLASH_SCREEN"
                 putExtra(OrientationControlService.EXTRA_SCREEN_ID, targetScreen.id)
+                putExtra("SCREEN_NAME", targetScreen.displayName)
+                putExtra("PALETTE_NAME", currentPalette.name)
+                putExtra("COLOR_1", currentPalette.actionBlue.value.toLong())
+                putExtra("COLOR_2", currentPalette.actionGreen.value.toLong())
+                putExtra("COLOR_3", currentPalette.actionYellow.value.toLong())
+                putExtra("BG_COLOR", currentPalette.background.value.toLong())
+                putExtra("TEXT_COLOR", currentPalette.white.value.toLong())
+                // Get current orientation for this screen
+                val orientation = when (targetScreen) {
+                    is TargetScreen.AllScreens -> _state.value.globalOrientation
+                    is TargetScreen.SpecificScreen -> {
+                        // Check for per-app setting first, otherwise global
+                        _state.value.perAppSettings.values.firstOrNull {
+                            it.targetScreen.id == targetScreen.id
+                        }?.orientation ?: _state.value.globalOrientation
+                    }
+                }
+                putExtra("ORIENTATION", orientation.displayName)
             }
             context.startService(intent)
         } catch (e: Exception) {
