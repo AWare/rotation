@@ -161,46 +161,80 @@ class CurrentAppTileService : TileService() {
     }
 
     private fun updateCurrentApp() {
-        val activityManager = getSystemService(ACTIVITY_SERVICE)
-        if (activityManager is ActivityManager) {
-            val packageName = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1) {
-                val usageService = getSystemService(USAGE_STATS_SERVICE)
-                if (usageService is android.app.usage.UsageStatsManager) {
-                    val endTime = System.currentTimeMillis()
-                    val startTime = endTime - 1000 * 10 // Last 10 seconds
-                    usageService.queryUsageStats(
-                        android.app.usage.UsageStatsManager.INTERVAL_DAILY,
-                        startTime,
-                        endTime
-                    )?.maxByOrNull { it.lastTimeUsed }?.packageName
-                } else null
-            } else null
+        val packageName = getCurrentForegroundApp()
+        android.util.Log.d("CurrentAppTileService", "updateCurrentApp: detected packageName=$packageName")
 
-            if (packageName != null && packageName != this.packageName) {
-                currentAppPackage = packageName
-                serviceScope?.launch {
-                    val currentSettingList = repository?.getSetting(packageName)?.getOrNull()
-                    val currentSetting = currentSettingList?.firstOrNull()
-                    val appName = try {
-                        packageManager.getApplicationInfo(packageName, 0)
-                            .loadLabel(packageManager).toString()
-                    } catch (e: Exception) {
-                        packageName
-                    }
-                    updateTileForApp(
-                        packageName,
-                        appName,
-                        currentSetting?.orientation ?: ScreenOrientation.Unspecified
-                    )
+        if (packageName != null && packageName != this.packageName) {
+            currentAppPackage = packageName
+            serviceScope?.launch {
+                val currentSettingList = repository?.getSetting(packageName)?.getOrNull()
+                val currentSetting = currentSettingList?.firstOrNull()
+                val appName = try {
+                    packageManager.getApplicationInfo(packageName, 0)
+                        .loadLabel(packageManager).toString()
+                } catch (e: Exception) {
+                    packageName
                 }
-            } else {
-                qsTile?.apply {
-                    state = Tile.STATE_INACTIVE
-                    label = "Current App"
-                    contentDescription = "No foreground app detected"
-                    updateTile()
+                updateTileForApp(
+                    packageName,
+                    appName,
+                    currentSetting?.orientation ?: ScreenOrientation.Unspecified
+                )
+            }
+        } else {
+            android.util.Log.w("CurrentAppTileService", "No foreground app detected (packageName=$packageName)")
+            qsTile?.apply {
+                state = Tile.STATE_INACTIVE
+                label = "Current App"
+                contentDescription = "No foreground app detected"
+                updateTile()
+            }
+        }
+    }
+
+    /**
+     * Get the current foreground app package using UsageEvents API
+     * This is more reliable than queryUsageStats for real-time detection
+     */
+    private fun getCurrentForegroundApp(): String? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP_MR1) {
+            android.util.Log.w("CurrentAppTileService", "UsageStats not available on this Android version")
+            return null
+        }
+
+        val usageStatsManager = getSystemService(USAGE_STATS_SERVICE) as? android.app.usage.UsageStatsManager
+        if (usageStatsManager == null) {
+            android.util.Log.e("CurrentAppTileService", "UsageStatsManager not available")
+            return null
+        }
+
+        try {
+            val endTime = System.currentTimeMillis()
+            val startTime = endTime - 1000 * 60 * 5 // Last 5 minutes
+
+            val usageEvents = usageStatsManager.queryEvents(startTime, endTime)
+            var lastForegroundApp: String? = null
+            var lastEventTime = 0L
+
+            while (usageEvents.hasNextEvent()) {
+                val event = android.app.usage.UsageEvents.Event()
+                usageEvents.getNextEvent(event)
+
+                // Look for MOVE_TO_FOREGROUND events
+                if (event.eventType == android.app.usage.UsageEvents.Event.ACTIVITY_RESUMED ||
+                    event.eventType == android.app.usage.UsageEvents.Event.MOVE_TO_FOREGROUND) {
+                    if (event.timeStamp > lastEventTime) {
+                        lastEventTime = event.timeStamp
+                        lastForegroundApp = event.packageName
+                    }
                 }
             }
+
+            android.util.Log.d("CurrentAppTileService", "Detected foreground app: $lastForegroundApp (at $lastEventTime)")
+            return lastForegroundApp
+        } catch (e: Exception) {
+            android.util.Log.e("CurrentAppTileService", "Error querying usage events", e)
+            return null
         }
     }
 
