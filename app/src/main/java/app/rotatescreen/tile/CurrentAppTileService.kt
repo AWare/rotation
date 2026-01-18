@@ -217,6 +217,7 @@ class CurrentAppTileService : TileService() {
     /**
      * Get the current foreground app package using UsageEvents API
      * This is more reliable than queryUsageStats for real-time detection
+     * FP: Uses immutable data structures and pure transformations
      */
     private fun getCurrentForegroundApp(): String? {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP_MR1) {
@@ -230,34 +231,55 @@ class CurrentAppTileService : TileService() {
             return null
         }
 
-        try {
+        return try {
             val endTime = System.currentTimeMillis()
             val startTime = endTime - 1000 * 60 * 5 // Last 5 minutes
 
-            val usageEvents = usageStatsManager.queryEvents(startTime, endTime)
-            var lastForegroundApp: String? = null
-            var lastEventTime = 0L
+            // FP: Extract events to immutable list
+            val foregroundEvents = extractForegroundEvents(usageStatsManager, startTime, endTime)
 
-            while (usageEvents.hasNextEvent()) {
-                val event = android.app.usage.UsageEvents.Event()
-                usageEvents.getNextEvent(event)
+            // FP: Find most recent using pure function (maxByOrNull)
+            val mostRecent = foregroundEvents.maxByOrNull { it.timestamp }
 
-                // Look for MOVE_TO_FOREGROUND events
-                if (event.eventType == android.app.usage.UsageEvents.Event.ACTIVITY_RESUMED ||
-                    event.eventType == android.app.usage.UsageEvents.Event.MOVE_TO_FOREGROUND) {
-                    if (event.timeStamp > lastEventTime) {
-                        lastEventTime = event.timeStamp
-                        lastForegroundApp = event.packageName
-                    }
-                }
-            }
-
-            android.util.Log.d("CurrentAppTileService", "Detected foreground app: $lastForegroundApp (at $lastEventTime)")
-            return lastForegroundApp
+            android.util.Log.d("CurrentAppTileService", "Detected foreground app: ${mostRecent?.packageName} (at ${mostRecent?.timestamp})")
+            mostRecent?.packageName
         } catch (e: Exception) {
             android.util.Log.e("CurrentAppTileService", "Error querying usage events", e)
-            return null
+            null
         }
+    }
+
+    /**
+     * FP: Pure data class for foreground event
+     */
+    private data class ForegroundEvent(
+        val packageName: String,
+        val timestamp: Long
+    )
+
+    /**
+     * FP: Extract foreground events to immutable list
+     */
+    private fun extractForegroundEvents(
+        usageStatsManager: android.app.usage.UsageStatsManager,
+        startTime: Long,
+        endTime: Long
+    ): List<ForegroundEvent> {
+        val events = mutableListOf<ForegroundEvent>()
+        val usageEvents = usageStatsManager.queryEvents(startTime, endTime)
+
+        while (usageEvents.hasNextEvent()) {
+            val event = android.app.usage.UsageEvents.Event()
+            usageEvents.getNextEvent(event)
+
+            // Filter for foreground events
+            if (event.eventType == android.app.usage.UsageEvents.Event.ACTIVITY_RESUMED ||
+                event.eventType == android.app.usage.UsageEvents.Event.MOVE_TO_FOREGROUND) {
+                events.add(ForegroundEvent(event.packageName, event.timeStamp))
+            }
+        }
+
+        return events.toList() // Convert to immutable list
     }
 
     private fun updateTileForApp(packageName: String, appName: String, orientation: ScreenOrientation) {
