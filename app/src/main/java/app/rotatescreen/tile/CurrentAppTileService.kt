@@ -34,6 +34,15 @@ class CurrentAppTileService : TileService() {
         getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
     }
 
+    private val orientationCycle = listOf(
+        ScreenOrientation.Unspecified,
+        ScreenOrientation.Portrait,
+        ScreenOrientation.Landscape,
+        ScreenOrientation.Sensor,
+        ScreenOrientation.ReversePortrait,
+        ScreenOrientation.ReverseLandscape
+    )
+
     override fun onCreate() {
         super.onCreate()
         serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
@@ -53,61 +62,8 @@ class CurrentAppTileService : TileService() {
         android.util.Log.d("CurrentAppTileService", "onClick: packageName=$packageName")
 
         if (packageName != null) {
-            serviceScope?.launch {
-                try {
-                    android.util.Log.d("CurrentAppTileService", "Showing orientation selector for $packageName")
-
-                    // Check if we have overlay permission
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
-                        !android.provider.Settings.canDrawOverlays(this@CurrentAppTileService)) {
-                        // Show toast to inform user
-                        android.widget.Toast.makeText(
-                            this@CurrentAppTileService,
-                            "Please grant 'Display over other apps' permission in app settings",
-                            android.widget.Toast.LENGTH_LONG
-                        ).show()
-
-                        // Open the permission settings for OUR app (not the target app)
-                        val intent = android.content.Intent(
-                            android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                            android.net.Uri.parse("package:${this@CurrentAppTileService.packageName}")
-                        ).apply {
-                            flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
-                        }
-                        startActivity(intent)
-                        return@launch
-                    }
-
-                    // Get app name
-                    val appName = try {
-                        packageManager.getApplicationInfo(packageName, 0)
-                            .loadLabel(packageManager).toString()
-                    } catch (e: Exception) {
-                        packageName
-                    }
-
-                    // Detect which displays are available (for now, show on all displays)
-                    val displayIds = displayManager.displays.map { it.displayId }.toIntArray()
-
-                    // Launch the orientation selector overlay
-                    val intent = Intent(this@CurrentAppTileService, OrientationSelectorOverlayService::class.java).apply {
-                        action = OrientationSelectorOverlayService.ACTION_SHOW_SELECTOR
-                        putExtra(OrientationSelectorOverlayService.EXTRA_PACKAGE_NAME, packageName)
-                        putExtra(OrientationSelectorOverlayService.EXTRA_APP_NAME, appName)
-                        putExtra(OrientationSelectorOverlayService.EXTRA_DISPLAY_IDS, displayIds)
-                    }
-                    startService(intent)
-
-                    android.util.Log.d("CurrentAppTileService", "Launched orientation selector overlay")
-                } catch (e: Exception) {
-                    android.util.Log.e("CurrentAppTileService", "Error in onClick", e)
-                    qsTile?.apply {
-                        state = Tile.STATE_INACTIVE
-                        label = "Error: ${e.message}"
-                        updateTile()
-                    }
-                }
-            }
+            // Just cycle through orientations and save
+            cycleOrientation(packageName)
         } else {
             android.util.Log.w("CurrentAppTileService", "No current app package - trying to refresh")
             // Try to detect the app again
@@ -118,6 +74,73 @@ class CurrentAppTileService : TileService() {
                 label = "Tap to open app"
                 contentDescription = "No foreground app detected. Grant Usage Access permission in app settings."
                 updateTile()
+            }
+        }
+    }
+
+    private fun cycleOrientation(packageName: String) {
+        serviceScope?.launch {
+            try {
+                android.util.Log.d("CurrentAppTileService", "Cycling orientation for $packageName")
+
+                // Get current setting (use first one or default)
+                val currentSettingList = repository?.getSetting(packageName)?.getOrNull()
+                val currentSetting = currentSettingList?.firstOrNull()
+                val currentOrientation = currentSetting?.orientation ?: ScreenOrientation.Unspecified
+
+                // Find next orientation
+                val currentIndex = orientationCycle.indexOf(currentOrientation)
+                val nextIndex = (currentIndex + 1) % orientationCycle.size
+                val nextOrientation = orientationCycle[nextIndex]
+
+                android.util.Log.d("CurrentAppTileService", "Cycling from ${currentOrientation.displayName} to ${nextOrientation.displayName}")
+
+                // Get app name
+                val appName = try {
+                    packageManager.getApplicationInfo(packageName, 0)
+                        .loadLabel(packageManager).toString()
+                } catch (e: Exception) {
+                    packageName
+                }
+
+                // Get target screen (use first display if no setting)
+                val targetScreen = currentSetting?.targetScreen ?: TargetScreen.AllScreens
+
+                // Save setting
+                val newSetting = AppOrientationSetting.create(
+                    packageName = packageName,
+                    appName = appName,
+                    orientation = nextOrientation,
+                    targetScreen = targetScreen
+                )
+                repository?.saveSetting(newSetting)
+                android.util.Log.d("CurrentAppTileService", "Saved setting for $appName: ${nextOrientation.displayName}")
+
+                // Apply the orientation immediately
+                val intent = Intent(this@CurrentAppTileService, OrientationControlService::class.java).apply {
+                    action = OrientationControlService.ACTION_SET_ORIENTATION
+                    putExtra(OrientationControlService.EXTRA_ORIENTATION, nextOrientation.value)
+                    putExtra(OrientationControlService.EXTRA_SCREEN_ID, targetScreen.id)
+                }
+                startService(intent)
+                android.util.Log.d("CurrentAppTileService", "Applied orientation")
+
+                // Update tile
+                updateTileForApp(packageName, appName, nextOrientation)
+
+                // Show toast feedback
+                android.widget.Toast.makeText(
+                    this@CurrentAppTileService,
+                    "$appName: ${nextOrientation.displayName}",
+                    android.widget.Toast.LENGTH_SHORT
+                ).show()
+            } catch (e: Exception) {
+                android.util.Log.e("CurrentAppTileService", "Error cycling orientation", e)
+                qsTile?.apply {
+                    state = Tile.STATE_INACTIVE
+                    label = "Error: ${e.message}"
+                    updateTile()
+                }
             }
         }
     }

@@ -19,6 +19,7 @@ import androidx.navigation.navArgument
 import app.rotatescreen.ui.components.RiscOsColors
 import app.rotatescreen.ui.navigation.Screen
 import app.rotatescreen.ui.screen.AppConfigScreen
+import app.rotatescreen.ui.screen.LogViewerScreen
 import app.rotatescreen.ui.screen.MainScreen
 import app.rotatescreen.ui.screen.PerAppSettingsScreen
 import app.rotatescreen.ui.theme.RotationTheme
@@ -112,6 +113,17 @@ fun RotationNavHost(
                 viewModel = viewModel,
                 onNavigateToPerApp = {
                     navController.navigate(Screen.PerApp.route)
+                },
+                onNavigateToLogs = {
+                    navController.navigate(Screen.LogViewer.route)
+                }
+            )
+        }
+
+        composable(Screen.LogViewer.route) {
+            LogViewerScreen(
+                onNavigateBack = {
+                    navController.popBackStack()
                 }
             )
         }
