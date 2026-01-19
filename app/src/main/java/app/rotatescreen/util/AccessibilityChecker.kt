@@ -16,22 +16,49 @@ object AccessibilityChecker {
         serviceName: String? = null
     ): Either<OrientationError, Boolean> =
         Either.catch {
-            val enabledServices = Settings.Secure.getString(
+            // First check if accessibility is enabled at all
+            val accessibilityEnabled = Settings.Secure.getInt(
+                context.contentResolver,
+                Settings.Secure.ACCESSIBILITY_ENABLED,
+                0
+            ) == 1
+
+            if (!accessibilityEnabled) {
+                return@catch false
+            }
+
+            // Get the colon-separated list of enabled services
+            val enabledServicesString = Settings.Secure.getString(
                 context.contentResolver,
                 Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
             ) ?: ""
+
+            if (enabledServicesString.isEmpty()) {
+                return@catch false
+            }
+
+            // Parse the colon-separated list
+            val enabledServices = enabledServicesString.split(":")
+                .map { it.trim() }
+                .filter { it.isNotEmpty() }
 
             // Use dynamic package name to support both debug and release builds
             val packageName = context.packageName
             val serviceClassName = ".service.ForegroundAppDetectorService"
 
             // Check for multiple possible formats
-            // Format 1: app.rotatescreen/.service.ForegroundAppDetectorService (or app.rotatescreen.debug/...)
-            // Format 2: app.rotatescreen/app.rotatescreen.service.ForegroundAppDetectorService (or app.rotatescreen.debug/...)
-            val shortName = "$packageName/$serviceClassName"
-            val fullName = "$packageName/$packageName.service.ForegroundAppDetectorService"
+            val possibleNames = listOf(
+                "$packageName/$serviceClassName",
+                "$packageName/$packageName.service.ForegroundAppDetectorService",
+                "$packageName/service.ForegroundAppDetectorService"
+            )
 
-            enabledServices.contains(shortName) || enabledServices.contains(fullName)
+            // Check if any of our service names is in the enabled list (exact match)
+            enabledServices.any { enabledService ->
+                possibleNames.any { possibleName ->
+                    enabledService.equals(possibleName, ignoreCase = true)
+                }
+            }
         }.mapLeft {
             OrientationError.ServiceNotRunning(serviceName ?: "ForegroundAppDetectorService")
         }

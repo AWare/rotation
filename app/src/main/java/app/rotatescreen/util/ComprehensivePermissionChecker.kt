@@ -83,27 +83,79 @@ object ComprehensivePermissionChecker {
 
     /**
      * Check if accessibility service is enabled
+     *
+     * Properly checks:
+     * 1. If accessibility is enabled at system level
+     * 2. If our specific service is in the enabled services list
+     * 3. Parses the colon-separated service list correctly
+     * 4. Handles both debug and release package names
      */
     fun isAccessibilityServiceEnabled(context: Context): Boolean {
         return try {
-            val enabledServices = Settings.Secure.getString(
+            // First check if accessibility is enabled at all
+            val accessibilityEnabled = Settings.Secure.getInt(
+                context.contentResolver,
+                Settings.Secure.ACCESSIBILITY_ENABLED,
+                0
+            ) == 1
+
+            if (!accessibilityEnabled) {
+                android.util.Log.d(
+                    "PermissionChecker",
+                    "Accessibility is disabled at system level"
+                )
+                return false
+            }
+
+            // Get the list of enabled accessibility services (colon-separated)
+            val enabledServicesString = Settings.Secure.getString(
                 context.contentResolver,
                 Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
             ) ?: ""
 
-            // Use dynamic package name to support both debug and release builds
+            if (enabledServicesString.isEmpty()) {
+                android.util.Log.d(
+                    "PermissionChecker",
+                    "No accessibility services enabled"
+                )
+                return false
+            }
+
+            // Parse the colon-separated list of enabled services
+            val enabledServices = enabledServicesString.split(":")
+                .map { it.trim() }
+                .filter { it.isNotEmpty() }
+
+            // Build the service component name
             val packageName = context.packageName
             val serviceClassName = ".service.ForegroundAppDetectorService"
 
             // Check for multiple possible formats
-            val shortName = "$packageName/$serviceClassName"
-            val fullName = "$packageName/$packageName.service.ForegroundAppDetectorService"
+            val possibleNames = listOf(
+                "$packageName/$serviceClassName",
+                "$packageName/$packageName.service.ForegroundAppDetectorService",
+                // Also check without leading dot (some Android versions)
+                "$packageName/service.ForegroundAppDetectorService",
+                "$packageName/${packageName.replace(".", "")}.service.ForegroundAppDetectorService"
+            )
 
-            val isEnabled = enabledServices.contains(shortName) || enabledServices.contains(fullName)
+            // Check if any of our service names is in the enabled list
+            val isEnabled = enabledServices.any { enabledService ->
+                possibleNames.any { possibleName ->
+                    enabledService.equals(possibleName, ignoreCase = true)
+                }
+            }
 
             android.util.Log.d(
                 "PermissionChecker",
-                "Accessibility check: packageName=$packageName, enabled=$isEnabled, services=$enabledServices"
+                buildString {
+                    appendLine("Accessibility check:")
+                    appendLine("  Package: $packageName")
+                    appendLine("  Enabled: $isEnabled")
+                    appendLine("  System accessibility: $accessibilityEnabled")
+                    appendLine("  Enabled services: ${enabledServices.joinToString(", ")}")
+                    appendLine("  Looking for: ${possibleNames.joinToString(", ")}")
+                }
             )
 
             isEnabled
