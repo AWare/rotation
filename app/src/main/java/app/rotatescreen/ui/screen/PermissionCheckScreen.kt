@@ -6,25 +6,22 @@ import android.provider.Settings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import app.rotatescreen.domain.model.PermissionStatus
+import app.rotatescreen.ui.components.*
 import app.rotatescreen.util.ComprehensivePermissionChecker
 
 /**
- * Permission check screen that shows on startup if permissions are missing
- * Displays visual ticks for granted permissions and guides users to grant missing ones
+ * RISC OS styled permission check screen
+ * Shows on startup if permissions are missing
  */
 @Composable
 fun PermissionCheckScreen(
@@ -32,20 +29,11 @@ fun PermissionCheckScreen(
     onPermissionsGranted: () -> Unit
 ) {
     val context = LocalContext.current
-    var permissionStatus by remember { mutableStateOf(ComprehensivePermissionChecker.checkAllPermissions(context)) }
-
-    // Refresh permissions when screen regains focus
-    DisposableEffect(Unit) {
-        val refresher = {
-            permissionStatus = ComprehensivePermissionChecker.checkAllPermissions(context)
-            if (permissionStatus.allGranted()) {
-                onPermissionsGranted()
-            }
-        }
-        onDispose { }
+    var permissionStatus by remember {
+        mutableStateOf(ComprehensivePermissionChecker.checkAllPermissions(context))
     }
 
-    // Refresh button callback
+    // Refresh permissions
     val onRefresh = {
         permissionStatus = ComprehensivePermissionChecker.checkAllPermissions(context)
         if (permissionStatus.allGranted()) {
@@ -53,202 +41,226 @@ fun PermissionCheckScreen(
         }
     }
 
-    Surface(
-        modifier = Modifier.fillMaxSize(),
-        color = MaterialTheme.colorScheme.background
+    MottledBackground(
+        modifier = Modifier.fillMaxSize()
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(16.dp)
+                .padding(8.dp)
                 .verticalScroll(rememberScrollState()),
-            horizontalAlignment = Alignment.CenterHorizontally
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Spacer(modifier = Modifier.height(32.dp))
+            // Title bar
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(RiscOsColors.actionYellow)
+                    .padding(horizontal = 12.dp, vertical = 8.dp)
+            ) {
+                Text(
+                    text = "⚠ Permissions Required",
+                    color = RiscOsColors.black,
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.titleLarge
+                )
+            }
 
-            // Header
-            Icon(
-                imageVector = Icons.Default.Security,
-                contentDescription = "Permissions",
-                modifier = Modifier.size(64.dp),
-                tint = MaterialTheme.colorScheme.primary
-            )
+            // Instructions
+            RiscOsPanel(
+                modifier = Modifier.fillMaxWidth(),
+                inset = true
+            ) {
+                RiscOsLabel(
+                    text = "Grant permissions below for full functionality. Critical permissions are required.",
+                    maxLines = 3,
+                    color = RiscOsColors.black
+                )
+            }
 
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Text(
-                text = "Permissions Required",
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Text(
-                text = "Grant the following permissions for full functionality",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
-            )
-
-            Spacer(modifier = Modifier.height(32.dp))
-
-            // Critical Permissions
-            Text(
-                text = "CRITICAL PERMISSIONS",
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary,
+            // Critical Permissions Section
+            RiscOsWindow(
+                title = "Critical Permissions",
                 modifier = Modifier.fillMaxWidth()
-            )
+            ) {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.padding(8.dp)
+                ) {
+                    // System Settings
+                    PermissionItem(
+                        name = "System Settings",
+                        description = "Change screen orientation",
+                        isGranted = permissionStatus.hasWriteSettings,
+                        icon = "⚙",
+                        onGrant = {
+                            val intent = Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS).apply {
+                                data = Uri.parse("package:${context.packageName}")
+                                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                            }
+                            context.startActivity(intent)
+                        }
+                    )
 
-            Spacer(modifier = Modifier.height(16.dp))
+                    // Overlay Permission
+                    PermissionItem(
+                        name = "Draw Over Apps",
+                        description = "Screen flash and overlays",
+                        isGranted = permissionStatus.hasOverlayPermission,
+                        icon = "🪟",
+                        onGrant = {
+                            val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION).apply {
+                                data = Uri.parse("package:${context.packageName}")
+                                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                            }
+                            context.startActivity(intent)
+                        }
+                    )
 
-            // Write Settings Permission
-            PermissionItem(
-                name = "System Settings",
-                description = "Required to change screen orientation",
-                isGranted = permissionStatus.hasWriteSettings,
-                icon = Icons.Default.Settings,
-                onGrant = {
-                    val intent = Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS).apply {
-                        data = Uri.parse("package:${context.packageName}")
-                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                    }
-                    context.startActivity(intent)
+                    // Usage Stats
+                    PermissionItem(
+                        name = "Usage Stats",
+                        description = "Detect current app",
+                        isGranted = permissionStatus.hasUsageStatsPermission,
+                        icon = "📊",
+                        onGrant = {
+                            val intent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS).apply {
+                                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                            }
+                            context.startActivity(intent)
+                        }
+                    )
+
+                    // Accessibility Service
+                    PermissionItem(
+                        name = "Accessibility Service",
+                        description = "Detect foreground apps",
+                        isGranted = permissionStatus.isAccessibilityServiceEnabled,
+                        icon = "♿",
+                        onGrant = {
+                            val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
+                                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                            }
+                            context.startActivity(intent)
+                        }
+                    )
                 }
-            )
+            }
 
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Overlay Permission
-            PermissionItem(
-                name = "Draw Over Apps",
-                description = "Required for screen flash and overlays",
-                isGranted = permissionStatus.hasOverlayPermission,
-                icon = Icons.Default.Layers,
-                onGrant = {
-                    val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION).apply {
-                        data = Uri.parse("package:${context.packageName}")
-                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                    }
-                    context.startActivity(intent)
-                }
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Usage Stats Permission
-            PermissionItem(
-                name = "Usage Stats",
-                description = "Required to detect current app for tiles",
-                isGranted = permissionStatus.hasUsageStatsPermission,
-                icon = Icons.Default.History,
-                onGrant = {
-                    val intent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS).apply {
-                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                    }
-                    context.startActivity(intent)
-                }
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Accessibility Service
-            PermissionItem(
-                name = "Accessibility Service",
-                description = "Required to detect foreground app changes",
-                isGranted = permissionStatus.isAccessibilityServiceEnabled,
-                icon = Icons.Default.Accessibility,
-                onGrant = {
-                    val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
-                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                    }
-                    context.startActivity(intent)
-                }
-            )
-
-            Spacer(modifier = Modifier.height(32.dp))
-
-            // Optional: Quick Settings Tiles
-            Text(
-                text = "QUICK SETTINGS TILES (OPTIONAL)",
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.secondary,
+            // Quick Settings Tiles Section
+            RiscOsWindow(
+                title = "Quick Settings Tiles (Optional)",
                 modifier = Modifier.fillMaxWidth()
-            )
+            ) {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.padding(8.dp)
+                ) {
+                    RiscOsLabel(
+                        text = "Swipe down → Edit → Drag tiles",
+                        maxLines = 2,
+                        color = RiscOsColors.veryDarkGray,
+                        fontWeight = FontWeight.Bold
+                    )
 
-            Spacer(modifier = Modifier.height(8.dp))
+                    TileItem(
+                        name = "Screen Rotation",
+                        description = "Cycle rotation modes",
+                        isAdded = permissionStatus.tilesAdded.orientationTileAdded
+                    )
 
-            Text(
-                text = "Swipe down from top → Edit tiles → Drag tiles to Quick Settings",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.fillMaxWidth()
-            )
+                    TileItem(
+                        name = "Global Rotation",
+                        description = "Change global setting",
+                        isAdded = permissionStatus.tilesAdded.globalOrientationTileAdded
+                    )
 
-            Spacer(modifier = Modifier.height(16.dp))
+                    TileItem(
+                        name = "Current App",
+                        description = "Per-app rotation",
+                        isAdded = permissionStatus.tilesAdded.currentAppTileAdded
+                    )
+                }
+            }
 
-            TileItem(
-                name = "Screen Rotation",
-                description = "Cycle through rotation modes",
-                isAdded = permissionStatus.tilesAdded.orientationTileAdded
-            )
+            // Progress
+            RiscOsPanel(
+                modifier = Modifier.fillMaxWidth(),
+                inset = true,
+                backgroundColor = RiscOsColors.lightGray
+            ) {
+                val criticalGranted = listOf(
+                    permissionStatus.hasWriteSettings,
+                    permissionStatus.hasOverlayPermission,
+                    permissionStatus.hasUsageStatsPermission,
+                    permissionStatus.isAccessibilityServiceEnabled
+                ).count { it }
 
-            Spacer(modifier = Modifier.height(12.dp))
+                val tilesAdded = permissionStatus.tilesAdded.tilesAddedCount()
 
-            TileItem(
-                name = "Global Rotation",
-                description = "Change global rotation setting",
-                isAdded = permissionStatus.tilesAdded.globalOrientationTileAdded
-            )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceAround
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            text = "$criticalGranted/4",
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.headlineSmall,
+                            color = if (criticalGranted == 4) RiscOsColors.actionGreen else RiscOsColors.actionRed
+                        )
+                        RiscOsLabel(text = "Critical", color = RiscOsColors.black)
+                    }
 
-            Spacer(modifier = Modifier.height(12.dp))
-
-            TileItem(
-                name = "Current App Rotation",
-                description = "Change rotation for current app",
-                isAdded = permissionStatus.tilesAdded.currentAppTileAdded
-            )
-
-            Spacer(modifier = Modifier.height(32.dp))
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            text = "$tilesAdded/3",
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.headlineSmall,
+                            color = if (tilesAdded == 3) RiscOsColors.actionGreen else RiscOsColors.veryDarkGray
+                        )
+                        RiscOsLabel(text = "Tiles", color = RiscOsColors.black)
+                    }
+                }
+            }
 
             // Action Buttons
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                // Refresh Button
-                OutlinedButton(
+                RiscOsButton(
                     onClick = onRefresh,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
+                    backgroundColor = RiscOsColors.actionBlue.copy(alpha = 0.3f)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Refresh,
-                        contentDescription = "Refresh",
-                        modifier = Modifier.size(18.dp)
+                    RiscOsLabel(
+                        text = "↻ Refresh",
+                        fontWeight = FontWeight.Bold,
+                        color = RiscOsColors.black
                     )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Refresh")
                 }
 
-                // Continue Button - enabled if all critical permissions granted
-                Button(
+                RiscOsButton(
                     onClick = onDismiss,
                     modifier = Modifier.weight(1f),
-                    enabled = permissionStatus.allGranted()
+                    backgroundColor = if (permissionStatus.allGranted())
+                        RiscOsColors.actionGreen
+                    else
+                        RiscOsColors.mediumGray
                 ) {
-                    Text(if (permissionStatus.allGranted()) "Continue" else "Pending...")
+                    RiscOsLabel(
+                        text = if (permissionStatus.allGranted()) "✓ Continue" else "⧗ Pending",
+                        fontWeight = FontWeight.Bold,
+                        color = if (permissionStatus.allGranted()) RiscOsColors.black else RiscOsColors.veryDarkGray
+                    )
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Progress indicator
-            PermissionProgress(permissionStatus)
-
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(8.dp))
         }
     }
 }
@@ -258,68 +270,56 @@ fun PermissionItem(
     name: String,
     description: String,
     isGranted: Boolean,
-    icon: ImageVector,
+    icon: String,
     onGrant: () -> Unit
 ) {
-    Card(
+    Row(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isGranted)
-                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
-            else
-                MaterialTheme.colorScheme.surfaceVariant
-        )
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
     ) {
+        // Icon and text
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
+            modifier = Modifier.weight(1f),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Icon
-            Icon(
-                imageVector = icon,
-                contentDescription = name,
-                modifier = Modifier.size(32.dp),
-                tint = if (isGranted)
-                    MaterialTheme.colorScheme.primary
-                else
-                    MaterialTheme.colorScheme.onSurfaceVariant
+            Text(
+                text = icon,
+                style = MaterialTheme.typography.headlineSmall
             )
-
-            Spacer(modifier = Modifier.width(16.dp))
-
-            // Text
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
+            Column {
+                RiscOsLabel(
                     text = name,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold
+                    fontWeight = FontWeight.Bold,
+                    color = RiscOsColors.black
                 )
-                Text(
+                RiscOsLabel(
                     text = description,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = RiscOsColors.darkGray
                 )
             }
+        }
 
-            Spacer(modifier = Modifier.width(16.dp))
-
-            // Status / Action
-            if (isGranted) {
-                Icon(
-                    imageVector = Icons.Default.CheckCircle,
-                    contentDescription = "Granted",
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(32.dp)
+        // Status or button
+        if (isGranted) {
+            Text(
+                text = "✓",
+                style = MaterialTheme.typography.headlineMedium,
+                color = RiscOsColors.actionGreen,
+                fontWeight = FontWeight.Bold
+            )
+        } else {
+            RiscOsButton(
+                onClick = onGrant,
+                backgroundColor = RiscOsColors.actionYellow,
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+            ) {
+                RiscOsLabel(
+                    text = "Grant",
+                    fontWeight = FontWeight.Bold,
+                    color = RiscOsColors.black
                 )
-            } else {
-                Button(
-                    onClick = onGrant,
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
-                ) {
-                    Text("Grant", style = MaterialTheme.typography.labelMedium)
-                }
             }
         }
     }
@@ -331,134 +331,39 @@ fun TileItem(
     description: String,
     isAdded: Boolean
 ) {
-    Card(
+    Row(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isAdded)
-                MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.3f)
-            else
-                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-        )
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
+            modifier = Modifier.weight(1f),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Icon
-            Icon(
-                imageVector = Icons.Default.Dashboard,
-                contentDescription = name,
-                modifier = Modifier.size(28.dp),
-                tint = if (isAdded)
-                    MaterialTheme.colorScheme.secondary
-                else
-                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+            Text(
+                text = "▢",
+                style = MaterialTheme.typography.headlineSmall,
+                color = if (isAdded) RiscOsColors.actionBlue else RiscOsColors.darkGray
             )
-
-            Spacer(modifier = Modifier.width(16.dp))
-
-            // Text
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
+            Column {
+                RiscOsLabel(
                     text = name,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Medium
+                    fontWeight = FontWeight.Bold,
+                    color = RiscOsColors.black
                 )
-                Text(
+                RiscOsLabel(
                     text = description,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
-            Spacer(modifier = Modifier.width(16.dp))
-
-            // Status
-            if (isAdded) {
-                Icon(
-                    imageVector = Icons.Default.CheckCircle,
-                    contentDescription = "Added",
-                    tint = MaterialTheme.colorScheme.secondary,
-                    modifier = Modifier.size(28.dp)
-                )
-            } else {
-                Icon(
-                    imageVector = Icons.Default.RadioButtonUnchecked,
-                    contentDescription = "Not Added",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
-                    modifier = Modifier.size(28.dp)
+                    color = RiscOsColors.darkGray
                 )
             }
         }
-    }
-}
 
-@Composable
-fun PermissionProgress(status: PermissionStatus) {
-    val criticalGranted = listOf(
-        status.hasWriteSettings,
-        status.hasOverlayPermission,
-        status.hasUsageStatsPermission,
-        status.isAccessibilityServiceEnabled
-    ).count { it }
-
-    val tilesAdded = status.tilesAdded.tilesAddedCount()
-
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
         Text(
-            text = "Progress",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly
-        ) {
-            ProgressIndicator(
-                label = "Critical",
-                current = criticalGranted,
-                total = 4,
-                color = MaterialTheme.colorScheme.primary
-            )
-
-            ProgressIndicator(
-                label = "Tiles",
-                current = tilesAdded,
-                total = 3,
-                color = MaterialTheme.colorScheme.secondary
-            )
-        }
-    }
-}
-
-@Composable
-fun ProgressIndicator(
-    label: String,
-    current: Int,
-    total: Int,
-    color: androidx.compose.ui.graphics.Color
-) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text(
-            text = "$current/$total",
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold,
-            color = color
-        )
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            text = if (isAdded) "✓" else "○",
+            style = MaterialTheme.typography.headlineMedium,
+            color = if (isAdded) RiscOsColors.actionGreen else RiscOsColors.darkGray,
+            fontWeight = FontWeight.Bold
         )
     }
 }

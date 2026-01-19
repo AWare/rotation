@@ -85,10 +85,32 @@ object ComprehensivePermissionChecker {
      * Check if accessibility service is enabled
      */
     fun isAccessibilityServiceEnabled(context: Context): Boolean {
-        return AccessibilityChecker.isAccessibilityServiceEnabled(context).fold(
-            { false },
-            { it }
-        )
+        return try {
+            val enabledServices = Settings.Secure.getString(
+                context.contentResolver,
+                Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+            ) ?: ""
+
+            // Use dynamic package name to support both debug and release builds
+            val packageName = context.packageName
+            val serviceClassName = ".service.ForegroundAppDetectorService"
+
+            // Check for multiple possible formats
+            val shortName = "$packageName/$serviceClassName"
+            val fullName = "$packageName/$packageName.service.ForegroundAppDetectorService"
+
+            val isEnabled = enabledServices.contains(shortName) || enabledServices.contains(fullName)
+
+            android.util.Log.d(
+                "PermissionChecker",
+                "Accessibility check: packageName=$packageName, enabled=$isEnabled, services=$enabledServices"
+            )
+
+            isEnabled
+        } catch (e: Exception) {
+            android.util.Log.e("PermissionChecker", "Error checking accessibility service", e)
+            false
+        }
     }
 
     /**
