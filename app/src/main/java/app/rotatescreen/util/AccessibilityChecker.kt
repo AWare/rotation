@@ -13,7 +13,7 @@ import app.rotatescreen.domain.model.OrientationError
 object AccessibilityChecker {
     fun isAccessibilityServiceEnabled(
         context: Context,
-        serviceName: String = "app.rotatescreen/.service.ForegroundAppDetectorService"
+        serviceName: String? = null
     ): Either<OrientationError, Boolean> =
         Either.catch {
             val enabledServices = Settings.Secure.getString(
@@ -21,26 +21,30 @@ object AccessibilityChecker {
                 Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
             ) ?: ""
 
+            // Use dynamic package name to support both debug and release builds
+            val packageName = context.packageName
+            val serviceClassName = ".service.ForegroundAppDetectorService"
+
             // Check for multiple possible formats
-            // Format 1: app.rotatescreen/.service.ForegroundAppDetectorService
-            // Format 2: app.rotatescreen/app.rotatescreen.service.ForegroundAppDetectorService
-            val shortName = "app.rotatescreen/.service.ForegroundAppDetectorService"
-            val fullName = "app.rotatescreen/app.rotatescreen.service.ForegroundAppDetectorService"
+            // Format 1: app.rotatescreen/.service.ForegroundAppDetectorService (or app.rotatescreen.debug/...)
+            // Format 2: app.rotatescreen/app.rotatescreen.service.ForegroundAppDetectorService (or app.rotatescreen.debug/...)
+            val shortName = "$packageName/$serviceClassName"
+            val fullName = "$packageName/$packageName.service.ForegroundAppDetectorService"
 
             enabledServices.contains(shortName) || enabledServices.contains(fullName)
         }.mapLeft {
-            OrientationError.ServiceNotRunning(serviceName)
+            OrientationError.ServiceNotRunning(serviceName ?: "ForegroundAppDetectorService")
         }
 
     fun checkAccessibilityServiceEnabled(
         context: Context,
-        serviceName: String = "app.rotatescreen/.service.ForegroundAppDetectorService"
+        serviceName: String? = null
     ): Either<OrientationError, Unit> =
         isAccessibilityServiceEnabled(context, serviceName).fold(
             { error -> error.left() },
             { isEnabled ->
                 if (isEnabled) Unit.right()
-                else OrientationError.ServiceNotRunning(serviceName).left()
+                else OrientationError.ServiceNotRunning(serviceName ?: "ForegroundAppDetectorService").left()
             }
         )
 }
