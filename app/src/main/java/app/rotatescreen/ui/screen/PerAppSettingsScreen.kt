@@ -34,6 +34,7 @@ fun PerAppSettingsScreen(
     val state by viewModel.state.collectAsState()
     val filteredApps by viewModel.filteredApps.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
+    val appFilter by viewModel.appFilter.collectAsState()
     val context = LocalContext.current
     val focusRequester = remember { FocusRequester() }
 
@@ -77,6 +78,36 @@ fun PerAppSettingsScreen(
                 fontWeight = FontWeight.Bold,
                 style = MaterialTheme.typography.titleLarge
             )
+        }
+
+        // Filter indicator
+        if (appFilter != null) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(RiscOsColors.actionGreen)
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Filter: [${appFilter}]",
+                    color = RiscOsColors.black,
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.Bold
+                )
+                RiscOsButton(
+                    onClick = { viewModel.clearAppFilter() },
+                    backgroundColor = RiscOsColors.white,
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    RiscOsLabel(
+                        text = "✕ Clear",
+                        fontWeight = FontWeight.Bold,
+                        color = RiscOsColors.black
+                    )
+                }
+            }
         }
 
         // Permission warnings

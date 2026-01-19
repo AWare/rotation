@@ -12,6 +12,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -45,6 +48,9 @@ class MainActivity : ComponentActivity() {
                 pkg.matches(Regex("^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)*$"))
             }
 
+        // Get filter from intent
+        val filter = intent?.getStringExtra(EXTRA_FILTER)
+
         setContent {
             RotationTheme {
                 Surface(
@@ -53,7 +59,8 @@ class MainActivity : ComponentActivity() {
                 ) {
                     RotationNavHost(
                         viewModel = viewModel,
-                        initialPackage = targetPackage
+                        initialPackage = targetPackage,
+                        initialFilter = filter
                     )
                 }
             }
@@ -84,31 +91,58 @@ class MainActivity : ComponentActivity() {
 
     companion object {
         const val EXTRA_TARGET_PACKAGE = "target_package"
+        const val EXTRA_FILTER = "filter"
+        const val FILTER_OPEN = "open"
     }
 }
 
 @Composable
 fun RotationNavHost(
     viewModel: MainViewModel,
-    initialPackage: String? = null
+    initialPackage: String? = null,
+    initialFilter: String? = null
 ) {
     val context = LocalContext.current
     val navController = rememberNavController()
+    val lifecycleOwner = LocalLifecycleOwner.current
 
     // Check permissions on startup and when resuming
     var showPermissionCheck by remember { mutableStateOf(false) }
     var permissionsChecked by remember { mutableStateOf(false) }
 
-    // Check permissions on first composition
+    // Check permissions on first composition and when returning from settings
     LaunchedEffect(Unit) {
         val hasMissing = ComprehensivePermissionChecker.hasMissingCriticalPermissions(context)
         showPermissionCheck = hasMissing
         permissionsChecked = true
     }
 
+    // Re-check permissions when activity resumes
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                val hasMissing = ComprehensivePermissionChecker.hasMissingCriticalPermissions(context)
+                showPermissionCheck = hasMissing
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
+    // Apply filter if provided
+    LaunchedEffect(initialFilter) {
+        if (initialFilter != null) {
+            viewModel.setAppFilter(initialFilter)
+        }
+    }
+
     // Determine start destination based on initial package
     val startDestination = if (initialPackage != null) {
         Screen.AppConfig.createRoute(initialPackage)
+    } else if (initialFilter != null) {
+        Screen.PerApp.route
     } else {
         Screen.Global.route
     }

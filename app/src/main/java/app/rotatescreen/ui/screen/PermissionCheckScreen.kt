@@ -152,42 +152,6 @@ fun PermissionCheckScreen(
                 }
             }
 
-            // Quick Settings Tiles Section
-            RiscOsWindow(
-                title = "Quick Settings Tiles (Optional)",
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.padding(8.dp)
-                ) {
-                    RiscOsLabel(
-                        text = "Swipe down → Edit → Drag tiles",
-                        maxLines = 2,
-                        color = RiscOsColors.veryDarkGray,
-                        fontWeight = FontWeight.Bold
-                    )
-
-                    TileItem(
-                        name = "Screen Rotation",
-                        description = "Cycle rotation modes",
-                        isAdded = permissionStatus.tilesAdded.orientationTileAdded
-                    )
-
-                    TileItem(
-                        name = "Global Rotation",
-                        description = "Change global setting",
-                        isAdded = permissionStatus.tilesAdded.globalOrientationTileAdded
-                    )
-
-                    TileItem(
-                        name = "Current App",
-                        description = "Per-app rotation",
-                        isAdded = permissionStatus.tilesAdded.currentAppTileAdded
-                    )
-                }
-            }
-
             // Progress
             RiscOsPanel(
                 modifier = Modifier.fillMaxWidth(),
@@ -201,11 +165,9 @@ fun PermissionCheckScreen(
                     permissionStatus.isAccessibilityServiceEnabled
                 ).count { it }
 
-                val tilesAdded = permissionStatus.tilesAdded.tilesAddedCount()
-
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceAround
+                    horizontalArrangement = Arrangement.Center
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
@@ -215,18 +177,7 @@ fun PermissionCheckScreen(
                             style = MaterialTheme.typography.headlineSmall,
                             color = if (criticalGranted == 4) RiscOsColors.actionGreen else RiscOsColors.actionRed
                         )
-                        RiscOsLabel(text = "Critical", color = RiscOsColors.black)
-                    }
-
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            text = "$tilesAdded/3",
-                            fontFamily = FontFamily.Monospace,
-                            fontWeight = FontWeight.Bold,
-                            style = MaterialTheme.typography.headlineSmall,
-                            color = if (tilesAdded == 3) RiscOsColors.actionGreen else RiscOsColors.veryDarkGray
-                        )
-                        RiscOsLabel(text = "Tiles", color = RiscOsColors.black)
+                        RiscOsLabel(text = "Critical Permissions", color = RiscOsColors.black)
                     }
                 }
             }
@@ -330,45 +281,3 @@ fun PermissionItem(
     }
 }
 
-@Composable
-fun TileItem(
-    name: String,
-    description: String,
-    isAdded: Boolean
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Row(
-            modifier = Modifier.weight(1f),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "▢",
-                style = MaterialTheme.typography.headlineSmall,
-                color = if (isAdded) RiscOsColors.actionBlue else RiscOsColors.darkGray
-            )
-            Column {
-                RiscOsLabel(
-                    text = name,
-                    fontWeight = FontWeight.Bold,
-                    color = RiscOsColors.black
-                )
-                RiscOsLabel(
-                    text = description,
-                    color = RiscOsColors.darkGray
-                )
-            }
-        }
-
-        Text(
-            text = if (isAdded) "✓" else "○",
-            style = MaterialTheme.typography.headlineMedium,
-            color = if (isAdded) RiscOsColors.actionGreen else RiscOsColors.darkGray,
-            fontWeight = FontWeight.Bold
-        )
-    }
-}

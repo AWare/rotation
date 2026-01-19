@@ -18,6 +18,7 @@ import app.rotatescreen.ui.components.*
 
 /**
  * Screen for configuring rotation settings for a specific app
+ * Shows separate settings panel for each available screen
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -29,20 +30,13 @@ fun AppConfigScreen(
     val state by viewModel.state.collectAsState()
     val filteredApps by viewModel.filteredApps.collectAsState()
     val availableScreens by viewModel.availableScreens.collectAsState()
-    val selectedAppScreens by viewModel.selectedAppScreens.collectAsState()
 
     val app = remember(filteredApps, packageName) {
         filteredApps.find { it.packageName == packageName }
     }
 
-    // Get the setting for the currently selected screen (reactive to screen selection changes)
-    val currentTargetScreen = selectedAppScreens[packageName] ?: TargetScreen.AllScreens
-    val currentSetting = state.getSettingForAppAndDisplay(packageName, currentTargetScreen.id)
-
-    // Log when values change
-    LaunchedEffect(currentTargetScreen, currentSetting) {
-        android.util.Log.d("AppConfigScreen", "Screen updated: ${currentTargetScreen.displayName} (id=${currentTargetScreen.id}), setting=${currentSetting?.orientation?.displayName}")
-    }
+    // Filter out AllScreens and keep only specific screens
+    val specificScreens = availableScreens.filterIsInstance<TargetScreen.SpecificScreen>()
 
     MottledBackground(
         modifier = Modifier.fillMaxSize()
@@ -85,45 +79,24 @@ fun AppConfigScreen(
         }
 
         if (app != null) {
-            // Screen selector
-            RiscOsWindow(
-                title = "Target Screen",
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                ScreenSelector(
-                    availableScreens = availableScreens,
-                    selectedScreen = currentTargetScreen,
-                    onScreenSelected = {
-                        android.util.Log.d("AppConfigScreen", "Screen selected: ${it.displayName} (id=${it.id}) for app $packageName")
-                        viewModel.setAppTargetScreen(packageName, it)
-                    },
-                    onScreenFlash = { screen ->
-                        viewModel.flashScreen(screen)
-                    }
+            // Show settings panel for each screen
+            specificScreens.forEach { screen ->
+                val setting = state.getSettingForAppAndDisplay(packageName, screen.id)
+
+                ScreenSettingsPanel(
+                    screen = screen,
+                    packageName = packageName,
+                    appName = app.appName,
+                    currentSetting = setting,
+                    viewModel = viewModel
                 )
             }
 
-            // Orientation selector
-            RiscOsWindow(
-                title = "Orientation",
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                OrientationSelector(
-                    selectedOrientation = currentSetting?.orientation
-                        ?: ScreenOrientation.Unspecified,
-                    onOrientationSelected = { orientation ->
-                        android.util.Log.d("AppConfigScreen", "Orientation selected: ${orientation.displayName} for app $packageName on screen ${currentTargetScreen.displayName} (id=${currentTargetScreen.id})")
-                        viewModel.setAppOrientation(
-                            packageName,
-                            app.appName,
-                            orientation
-                        )
-                    }
-                )
+            // Remove all button if any settings exist
+            val hasAnySettings = specificScreens.any { screen ->
+                state.getSettingForAppAndDisplay(packageName, screen.id) != null
             }
-
-            // Remove button if setting exists
-            if (currentSetting != null) {
+            if (hasAnySettings) {
                 RiscOsButton(
                     onClick = {
                         viewModel.removeAppSetting(packageName)
@@ -133,7 +106,7 @@ fun AppConfigScreen(
                     backgroundColor = RiscOsColors.actionRed.copy(alpha = 0.4f)
                 ) {
                     RiscOsLabel(
-                        text = "✕ Remove Setting",
+                        text = "✕ Remove All Settings",
                         fontWeight = FontWeight.Bold,
                         color = RiscOsColors.white
                     )
@@ -151,6 +124,101 @@ fun AppConfigScreen(
                 )
             }
         }
+        }
+    }
+}
+
+/**
+ * Settings panel for a specific screen
+ */
+@Composable
+fun ScreenSettingsPanel(
+    screen: TargetScreen.SpecificScreen,
+    packageName: String,
+    appName: String,
+    currentSetting: AppOrientationSetting?,
+    viewModel: MainViewModel
+) {
+    RiscOsWindow(
+        title = screen.displayName,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            // Screen info with flash button
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Screen icon and name
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    val icon = when (screen.ratio) {
+                        app.rotatescreen.domain.model.AspectRatio.PORTRAIT -> "▯"
+                        app.rotatescreen.domain.model.AspectRatio.LANDSCAPE -> "▬"
+                        app.rotatescreen.domain.model.AspectRatio.SQUARE -> "▪"
+                    }
+                    RiscOsLabel(
+                        text = icon,
+                        fontWeight = FontWeight.Bold
+                    )
+                    RiscOsLabel(
+                        text = "Display ${screen.displayId}",
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                // Flash button
+                RiscOsButton(
+                    onClick = { viewModel.flashScreen(screen) },
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                    backgroundColor = RiscOsColors.actionYellow
+                ) {
+                    RiscOsLabel(
+                        text = "⚡ Flash",
+                        fontWeight = FontWeight.Bold,
+                        color = RiscOsColors.black
+                    )
+                }
+            }
+
+            // Orientation selector
+            OrientationSelector(
+                selectedOrientation = currentSetting?.orientation
+                    ?: ScreenOrientation.Unspecified,
+                onOrientationSelected = { orientation ->
+                    android.util.Log.d("ScreenSettingsPanel", "Orientation selected: ${orientation.displayName} for app $packageName on screen ${screen.displayName} (id=${screen.id})")
+                    // Set the target screen for this app
+                    viewModel.setAppTargetScreen(packageName, screen)
+                    // Then set the orientation
+                    viewModel.setAppOrientation(
+                        packageName,
+                        appName,
+                        orientation
+                    )
+                }
+            )
+
+            // Remove button for this screen if setting exists
+            if (currentSetting != null) {
+                RiscOsButton(
+                    onClick = {
+                        viewModel.removeAppSettingForScreen(packageName, screen.id)
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    backgroundColor = RiscOsColors.actionRed.copy(alpha = 0.2f)
+                ) {
+                    RiscOsLabel(
+                        text = "✕ Remove",
+                        fontWeight = FontWeight.Bold,
+                        color = RiscOsColors.white
+                    )
+                }
+            }
         }
     }
 }

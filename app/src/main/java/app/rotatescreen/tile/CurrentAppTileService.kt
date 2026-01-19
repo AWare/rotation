@@ -288,15 +288,15 @@ class CurrentAppTileService : TileService() {
             label = "$appName: ${orientation.displayName}"
             contentDescription = "Current app: $appName, Orientation: ${orientation.displayName}. Long press to configure."
 
-            // For Android 13+, set a PendingIntent to open MainActivity with the package
+            // For Android 13+, set a PendingIntent to open PerApp screen with [open] filter
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 val intent = Intent(this@CurrentAppTileService, MainActivity::class.java).apply {
-                    putExtra(MainActivity.EXTRA_TARGET_PACKAGE, packageName)
+                    putExtra(MainActivity.EXTRA_FILTER, MainActivity.FILTER_OPEN)
                     flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
                 }
                 val pendingIntent = PendingIntent.getActivity(
                     this@CurrentAppTileService,
-                    packageName.hashCode(),
+                    "open_apps_filter".hashCode(),
                     intent,
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                 )

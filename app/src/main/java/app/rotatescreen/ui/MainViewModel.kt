@@ -48,6 +48,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
 
+    private val _appFilter = MutableStateFlow<String?>(null)
+    val appFilter: StateFlow<String?> = _appFilter.asStateFlow()
+
     private val _availableScreens = MutableStateFlow<List<TargetScreen>>(listOf(TargetScreen.AllScreens))
     val availableScreens: StateFlow<List<TargetScreen>> = _availableScreens.asStateFlow()
 
@@ -59,10 +62,26 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     val filteredApps: StateFlow<List<InstalledApp>> = combine(
         installedApps,
-        searchQuery
-    ) { apps, query ->
-        if (query.isBlank()) apps
-        else apps.filter { it.appName.contains(query, ignoreCase = true) }
+        searchQuery,
+        appFilter
+    ) { apps, query, filter ->
+        var result = apps
+
+        // Apply search query filter
+        if (query.isNotBlank()) {
+            result = result.filter { it.appName.contains(query, ignoreCase = true) }
+        }
+
+        // Apply special filters
+        when (filter) {
+            "open" -> {
+                // Get currently running apps
+                val runningPackages = getRunningApps()
+                result = result.filter { it.packageName in runningPackages }
+            }
+        }
+
+        result
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val displayListener = object : DisplayManager.DisplayListener {
@@ -466,6 +485,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun removeAppSettingForScreen(packageName: String, displayId: Int) {
+        viewModelScope.launch {
+            repository.deleteSettingForDisplay(packageName, displayId)
+            // Refresh app list to update visual indicators
+            loadInstalledApps()
+        }
+    }
+
     fun toggleAppSettingEnabled(packageName: String) {
         viewModelScope.launch {
             val currentSettings = state.value.perAppSettings[packageName] ?: return@launch
@@ -477,6 +504,53 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun updateSearchQuery(query: String) {
         _searchQuery.value = query
+    }
+
+    fun setAppFilter(filter: String?) {
+        _appFilter.value = filter
+    }
+
+    fun clearAppFilter() {
+        _appFilter.value = null
+    }
+
+    /**
+     * Get currently running/open apps using UsageStatsManager
+     * FP: Pure function that returns immutable set
+     */
+    private fun getRunningApps(): Set<String> {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP_MR1) {
+            return emptySet()
+        }
+
+        return try {
+            val usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE)
+                as? android.app.usage.UsageStatsManager
+                ?: return emptySet()
+
+            val endTime = System.currentTimeMillis()
+            val startTime = endTime - 1000 * 60 * 5 // Last 5 minutes
+
+            // Use UsageEvents to get recently active apps
+            val usageEvents = usageStatsManager.queryEvents(startTime, endTime)
+            val runningApps = mutableSetOf<String>()
+
+            while (usageEvents.hasNextEvent()) {
+                val event = android.app.usage.UsageEvents.Event()
+                usageEvents.getNextEvent(event)
+
+                // Track apps that were recently in foreground
+                if (event.eventType == android.app.usage.UsageEvents.Event.ACTIVITY_RESUMED ||
+                    event.eventType == android.app.usage.UsageEvents.Event.MOVE_TO_FOREGROUND) {
+                    runningApps.add(event.packageName)
+                }
+            }
+
+            runningApps.toSet() // Return immutable set
+        } catch (e: Exception) {
+            android.util.Log.e("MainViewModel", "Error getting running apps", e)
+            emptySet()
+        }
     }
 
     fun requestDrawOverlayPermission() {
