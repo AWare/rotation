@@ -61,4 +61,16 @@ object ForegroundAppDetectorHelpers {
      */
     fun hasCustomOrientation(settings: List<AppOrientationSetting>): Boolean =
         settings.any { it.enabled }
+
+    /**
+     * FP: Pure function to check if package is a known system launcher
+     * @param packageName Package name to check
+     * @return true if package is a known system launcher
+     */
+    fun isSystemLauncher(packageName: String): Boolean =
+        packageName.contains("launcher", ignoreCase = true) ||
+        packageName == "com.android.launcher3" ||
+        packageName == "com.google.android.apps.nexuslauncher" ||
+        packageName == "com.teslacoilsw.launcher" || // Nova Launcher
+        packageName == "ch.deletescape.lawnchair.plah" // Lawnchair
 }

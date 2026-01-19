@@ -358,4 +358,62 @@ class ForegroundAppDetectorHelpersTest {
 
         assertFalse(result)
     }
+
+    // ========== isSystemLauncher Tests ==========
+
+    @Test
+    fun `isSystemLauncher returns true for known AOSP launcher`() {
+        val result = ForegroundAppDetectorHelpers.isSystemLauncher("com.android.launcher3")
+
+        assertTrue(result)
+    }
+
+    @Test
+    fun `isSystemLauncher returns true for Google Pixel launcher`() {
+        val result = ForegroundAppDetectorHelpers.isSystemLauncher("com.google.android.apps.nexuslauncher")
+
+        assertTrue(result)
+    }
+
+    @Test
+    fun `isSystemLauncher returns true for Nova Launcher`() {
+        val result = ForegroundAppDetectorHelpers.isSystemLauncher("com.teslacoilsw.launcher")
+
+        assertTrue(result)
+    }
+
+    @Test
+    fun `isSystemLauncher returns true for Lawnchair`() {
+        val result = ForegroundAppDetectorHelpers.isSystemLauncher("ch.deletescape.lawnchair.plah")
+
+        assertTrue(result)
+    }
+
+    @Test
+    fun `isSystemLauncher returns true for package containing launcher`() {
+        val result = ForegroundAppDetectorHelpers.isSystemLauncher("com.somevendor.launcher.app")
+
+        assertTrue(result)
+    }
+
+    @Test
+    fun `isSystemLauncher is case insensitive`() {
+        val result = ForegroundAppDetectorHelpers.isSystemLauncher("com.somevendor.LAUNCHER.app")
+
+        assertTrue(result)
+    }
+
+    @Test
+    fun `isSystemLauncher returns false for regular app`() {
+        val result = ForegroundAppDetectorHelpers.isSystemLauncher("com.example.app")
+
+        assertFalse(result)
+    }
+
+    @Test
+    fun `isSystemLauncher returns false for app without launcher in name`() {
+        val result = ForegroundAppDetectorHelpers.isSystemLauncher("com.example.camera")
+
+        assertFalse(result)
+    }
 }
