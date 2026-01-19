@@ -1,5 +1,6 @@
 package app.rotatescreen.util
 
+import android.accessibilityservice.AccessibilityServiceInfo
 import android.app.AppOpsManager
 import android.content.ComponentName
 import android.content.Context
@@ -7,8 +8,10 @@ import android.os.Build
 import android.os.Process
 import android.provider.Settings
 import android.service.quicksettings.TileService
+import android.view.accessibility.AccessibilityManager
 import app.rotatescreen.domain.model.PermissionStatus
 import app.rotatescreen.domain.model.TileStatus
+import app.rotatescreen.service.ForegroundAppDetectorService
 import app.rotatescreen.tile.CurrentAppTileService
 import app.rotatescreen.tile.GlobalOrientationTileService
 import app.rotatescreen.tile.OrientationTileService
@@ -84,77 +87,68 @@ object ComprehensivePermissionChecker {
     /**
      * Check if accessibility service is enabled
      *
-     * Properly checks:
-     * 1. If accessibility is enabled at system level
-     * 2. If our specific service is in the enabled services list
-     * 3. Parses the colon-separated service list correctly
-     * 4. Handles both debug and release package names
+     * Uses AccessibilityManager to check if service is actually running.
+     * This is the proper, reliable method used by other apps.
+     *
+     * How it works:
+     * 1. Get AccessibilityManager system service
+     * 2. Get list of enabled accessibility services
+     * 3. Check if our service ComponentName is in the list
      */
     fun isAccessibilityServiceEnabled(context: Context): Boolean {
         return try {
-            // First check if accessibility is enabled at all
-            val accessibilityEnabled = Settings.Secure.getInt(
-                context.contentResolver,
-                Settings.Secure.ACCESSIBILITY_ENABLED,
-                0
-            ) == 1
+            // Get AccessibilityManager system service
+            val accessibilityManager = context.getSystemService(Context.ACCESSIBILITY_SERVICE)
+                as? AccessibilityManager
 
-            if (!accessibilityEnabled) {
-                android.util.Log.d(
-                    "PermissionChecker",
-                    "Accessibility is disabled at system level"
-                )
+            if (accessibilityManager == null) {
+                android.util.Log.e("PermissionChecker", "AccessibilityManager not available")
                 return false
             }
 
-            // Get the list of enabled accessibility services (colon-separated)
-            val enabledServicesString = Settings.Secure.getString(
-                context.contentResolver,
-                Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
-            ) ?: ""
-
-            if (enabledServicesString.isEmpty()) {
-                android.util.Log.d(
-                    "PermissionChecker",
-                    "No accessibility services enabled"
-                )
+            // Check if accessibility is enabled at all
+            if (!accessibilityManager.isEnabled) {
+                android.util.Log.d("PermissionChecker", "Accessibility is disabled at system level")
                 return false
             }
 
-            // Parse the colon-separated list of enabled services
-            val enabledServices = enabledServicesString.split(":")
-                .map { it.trim() }
-                .filter { it.isNotEmpty() }
-
-            // Build the service component name
-            val packageName = context.packageName
-            val serviceClassName = ".service.ForegroundAppDetectorService"
-
-            // Check for multiple possible formats
-            val possibleNames = listOf(
-                "$packageName/$serviceClassName",
-                "$packageName/$packageName.service.ForegroundAppDetectorService",
-                // Also check without leading dot (some Android versions)
-                "$packageName/service.ForegroundAppDetectorService",
-                "$packageName/${packageName.replace(".", "")}.service.ForegroundAppDetectorService"
+            // Get list of enabled accessibility services
+            val enabledServices = accessibilityManager.getEnabledAccessibilityServiceList(
+                AccessibilityServiceInfo.FEEDBACK_ALL_MASK
             )
 
-            // Check if any of our service names is in the enabled list
-            val isEnabled = enabledServices.any { enabledService ->
-                possibleNames.any { possibleName ->
-                    enabledService.equals(possibleName, ignoreCase = true)
-                }
+            if (enabledServices.isEmpty()) {
+                android.util.Log.d("PermissionChecker", "No accessibility services enabled")
+                return false
+            }
+
+            // Build our service ComponentName
+            val ourServiceComponent = ComponentName(
+                context,
+                ForegroundAppDetectorService::class.java
+            )
+
+            // Check if our service is in the enabled list
+            val isEnabled = enabledServices.any { serviceInfo ->
+                val serviceId = serviceInfo.id
+                val componentFromId = ComponentName.unflattenFromString(serviceId)
+
+                // Compare ComponentNames
+                componentFromId == ourServiceComponent
             }
 
             android.util.Log.d(
                 "PermissionChecker",
                 buildString {
-                    appendLine("Accessibility check:")
-                    appendLine("  Package: $packageName")
+                    appendLine("Accessibility check (using AccessibilityManager):")
+                    appendLine("  Package: ${context.packageName}")
+                    appendLine("  Our service: ${ourServiceComponent.flattenToShortString()}")
                     appendLine("  Enabled: $isEnabled")
-                    appendLine("  System accessibility: $accessibilityEnabled")
-                    appendLine("  Enabled services: ${enabledServices.joinToString(", ")}")
-                    appendLine("  Looking for: ${possibleNames.joinToString(", ")}")
+                    appendLine("  System accessibility: ${accessibilityManager.isEnabled}")
+                    appendLine("  Enabled services count: ${enabledServices.size}")
+                    enabledServices.forEach { service ->
+                        appendLine("    - ${service.id}")
+                    }
                 }
             )
 
