@@ -94,6 +94,7 @@ fun PermissionCheckScreen(
                         description = "Change screen orientation",
                         isGranted = permissionStatus.hasWriteSettings,
                         icon = "⚙",
+                        buttonLabel = "Settings",
                         onGrant = {
                             val intent = Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS).apply {
                                 data = Uri.parse("package:${context.packageName}")
@@ -109,6 +110,7 @@ fun PermissionCheckScreen(
                         description = "Screen flash and overlays",
                         isGranted = permissionStatus.hasOverlayPermission,
                         icon = "🪟",
+                        buttonLabel = "Overlay",
                         onGrant = {
                             val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION).apply {
                                 data = Uri.parse("package:${context.packageName}")
@@ -124,6 +126,7 @@ fun PermissionCheckScreen(
                         description = "Detect current app",
                         isGranted = permissionStatus.hasUsageStatsPermission,
                         icon = "📊",
+                        buttonLabel = "Usage",
                         onGrant = {
                             val intent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS).apply {
                                 flags = Intent.FLAG_ACTIVITY_NEW_TASK
@@ -138,6 +141,7 @@ fun PermissionCheckScreen(
                         description = "Detect foreground apps",
                         isGranted = permissionStatus.isAccessibilityServiceEnabled,
                         icon = "♿",
+                        buttonLabel = "A11y",
                         onGrant = {
                             val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
                                 flags = Intent.FLAG_ACTIVITY_NEW_TASK
@@ -271,6 +275,7 @@ fun PermissionItem(
     description: String,
     isGranted: Boolean,
     icon: String,
+    buttonLabel: String,
     onGrant: () -> Unit
 ) {
     Row(
@@ -316,7 +321,7 @@ fun PermissionItem(
                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
             ) {
                 RiscOsLabel(
-                    text = "Grant",
+                    text = buttonLabel,
                     fontWeight = FontWeight.Bold,
                     color = RiscOsColors.black
                 )
