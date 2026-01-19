@@ -9,8 +9,9 @@ import androidx.activity.viewModels
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -22,7 +23,9 @@ import app.rotatescreen.ui.screen.AppConfigScreen
 import app.rotatescreen.ui.screen.LogViewerScreen
 import app.rotatescreen.ui.screen.MainScreen
 import app.rotatescreen.ui.screen.PerAppSettingsScreen
+import app.rotatescreen.ui.screen.PermissionCheckScreen
 import app.rotatescreen.ui.theme.RotationTheme
+import app.rotatescreen.util.ComprehensivePermissionChecker
 
 /**
  * Main activity using Jetpack Compose with navigation
@@ -89,7 +92,19 @@ fun RotationNavHost(
     viewModel: MainViewModel,
     initialPackage: String? = null
 ) {
+    val context = LocalContext.current
     val navController = rememberNavController()
+
+    // Check permissions on startup and when resuming
+    var showPermissionCheck by remember { mutableStateOf(false) }
+    var permissionsChecked by remember { mutableStateOf(false) }
+
+    // Check permissions on first composition
+    LaunchedEffect(Unit) {
+        val hasMissing = ComprehensivePermissionChecker.hasMissingCriticalPermissions(context)
+        showPermissionCheck = hasMissing
+        permissionsChecked = true
+    }
 
     // Determine start destination based on initial package
     val startDestination = if (initialPackage != null) {
@@ -98,10 +113,22 @@ fun RotationNavHost(
         Screen.Global.route
     }
 
-    NavHost(
-        navController = navController,
-        startDestination = startDestination
-    ) {
+    // Show permission check overlay if permissions are missing
+    if (showPermissionCheck) {
+        PermissionCheckScreen(
+            onDismiss = {
+                showPermissionCheck = false
+            },
+            onPermissionsGranted = {
+                showPermissionCheck = false
+            }
+        )
+    } else if (permissionsChecked) {
+        // Only show main content after permissions are checked
+        NavHost(
+            navController = navController,
+            startDestination = startDestination
+        ) {
         composable(Screen.Global.route) {
             // Handle back press on main screen to exit app
             BackHandler {
@@ -153,5 +180,6 @@ fun RotationNavHost(
                 }
             )
         }
+    }
     }
 }
