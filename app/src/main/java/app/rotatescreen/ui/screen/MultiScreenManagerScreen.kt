@@ -247,7 +247,17 @@ fun AppScreenItem(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                ScreenOrientation.entries.take(6).forEach { orientation ->
+                // List of orientations to show
+                val orientations = listOf(
+                    ScreenOrientation.Unspecified,
+                    ScreenOrientation.Portrait,
+                    ScreenOrientation.Landscape,
+                    ScreenOrientation.Sensor,
+                    ScreenOrientation.ReversePortrait,
+                    ScreenOrientation.ReverseLandscape
+                )
+
+                orientations.forEach { orientation ->
                     RiscOsButton(
                         onClick = {
                             viewModel.setAppTargetScreen(setting.packageName, currentScreen)
