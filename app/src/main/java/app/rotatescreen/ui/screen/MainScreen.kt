@@ -20,6 +20,7 @@ import app.rotatescreen.ui.components.*
 fun MainScreen(
     viewModel: MainViewModel,
     onNavigateToPerApp: () -> Unit,
+    onNavigateToMultiScreenManager: () -> Unit = {},
     onNavigateToLogs: () -> Unit = {}
 ) {
     val state by viewModel.state.collectAsState()
@@ -137,6 +138,30 @@ fun MainScreen(
                 ) {
                     RiscOsLabel(
                         text = "Configure Apps ▶",
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+
+        // Multi-Screen Manager button
+        RiscOsWindow(
+            title = "Multi-Screen Manager",
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                RiscOsLabel(
+                    text = "Manage apps across multiple screens. View and move apps between displays.",
+                    maxLines = 2
+                )
+
+                RiscOsButton(
+                    onClick = onNavigateToMultiScreenManager,
+                    modifier = Modifier.fillMaxWidth(),
+                    backgroundColor = RiscOsColors.actionBlue.copy(alpha = 0.3f)
+                ) {
+                    RiscOsLabel(
+                        text = "Manage Screens ▶",
                         fontWeight = FontWeight.Bold
                     )
                 }

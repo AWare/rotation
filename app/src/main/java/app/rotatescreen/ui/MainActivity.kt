@@ -25,6 +25,7 @@ import app.rotatescreen.ui.navigation.Screen
 import app.rotatescreen.ui.screen.AppConfigScreen
 import app.rotatescreen.ui.screen.LogViewerScreen
 import app.rotatescreen.ui.screen.MainScreen
+import app.rotatescreen.ui.screen.MultiScreenManagerScreen
 import app.rotatescreen.ui.screen.PerAppSettingsScreen
 import app.rotatescreen.ui.screen.PermissionCheckScreen
 import app.rotatescreen.ui.theme.RotationTheme
@@ -51,6 +52,9 @@ class MainActivity : ComponentActivity() {
         // Get filter from intent
         val filter = intent?.getStringExtra(EXTRA_FILTER)
 
+        // Get target screen from intent
+        val targetScreen = intent?.getStringExtra(EXTRA_SCREEN)
+
         setContent {
             RotationTheme {
                 Surface(
@@ -60,7 +64,8 @@ class MainActivity : ComponentActivity() {
                     RotationNavHost(
                         viewModel = viewModel,
                         initialPackage = targetPackage,
-                        initialFilter = filter
+                        initialFilter = filter,
+                        initialScreen = targetScreen
                     )
                 }
             }
@@ -92,6 +97,7 @@ class MainActivity : ComponentActivity() {
     companion object {
         const val EXTRA_TARGET_PACKAGE = "target_package"
         const val EXTRA_FILTER = "filter"
+        const val EXTRA_SCREEN = "screen"
         const val FILTER_OPEN = "open"
     }
 }
@@ -100,7 +106,8 @@ class MainActivity : ComponentActivity() {
 fun RotationNavHost(
     viewModel: MainViewModel,
     initialPackage: String? = null,
-    initialFilter: String? = null
+    initialFilter: String? = null,
+    initialScreen: String? = null
 ) {
     val context = LocalContext.current
     val navController = rememberNavController()
@@ -138,13 +145,12 @@ fun RotationNavHost(
         }
     }
 
-    // Determine start destination based on initial package
-    val startDestination = if (initialPackage != null) {
-        Screen.AppConfig.createRoute(initialPackage)
-    } else if (initialFilter != null) {
-        Screen.PerApp.route
-    } else {
-        Screen.Global.route
+    // Determine start destination based on initial parameters
+    val startDestination = when {
+        initialPackage != null -> Screen.AppConfig.createRoute(initialPackage)
+        initialScreen == "multi_screen_manager" -> Screen.MultiScreenManager.route
+        initialFilter != null -> Screen.PerApp.route
+        else -> Screen.Global.route
     }
 
     // Show permission check overlay if permissions are missing
@@ -175,6 +181,9 @@ fun RotationNavHost(
                 onNavigateToPerApp = {
                     navController.navigate(Screen.PerApp.route)
                 },
+                onNavigateToMultiScreenManager = {
+                    navController.navigate(Screen.MultiScreenManager.route)
+                },
                 onNavigateToLogs = {
                     navController.navigate(Screen.LogViewer.route)
                 }
@@ -184,6 +193,15 @@ fun RotationNavHost(
         composable(Screen.LogViewer.route) {
             LogViewerScreen(
                 onNavigateBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        composable(Screen.MultiScreenManager.route) {
+            MultiScreenManagerScreen(
+                viewModel = viewModel,
+                onBackClick = {
                     navController.popBackStack()
                 }
             )

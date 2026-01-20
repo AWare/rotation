@@ -360,15 +360,15 @@ class CurrentAppTileService : TileService() {
             label = "$appName: ${orientation.displayName}"
             contentDescription = "Current app: $appName, Orientation: ${orientation.displayName}. Long press to configure."
 
-            // For Android 13+, set a PendingIntent to open PerApp screen with [open] filter
+            // For Android 13+, set a PendingIntent to open Multi-Screen Manager
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 val intent = Intent(this@CurrentAppTileService, MainActivity::class.java).apply {
-                    putExtra(MainActivity.EXTRA_FILTER, MainActivity.FILTER_OPEN)
+                    putExtra(MainActivity.EXTRA_SCREEN, "multi_screen_manager")
                     flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
                 }
                 val pendingIntent = PendingIntent.getActivity(
                     this@CurrentAppTileService,
-                    "open_apps_filter".hashCode(),
+                    "multi_screen_manager".hashCode(),
                     intent,
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                 )
