@@ -247,17 +247,7 @@ fun AppScreenItem(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                // List of orientations to show
-                val orientations = listOf(
-                    ScreenOrientation.Unspecified,
-                    ScreenOrientation.Portrait,
-                    ScreenOrientation.Landscape,
-                    ScreenOrientation.Sensor,
-                    ScreenOrientation.ReversePortrait,
-                    ScreenOrientation.ReverseLandscape
-                )
-
-                orientations.forEach { orientation ->
+                ScreenOrientation.all().forEach { orientation ->
                     RiscOsButton(
                         onClick = {
                             viewModel.setAppTargetScreen(setting.packageName, currentScreen)
@@ -276,7 +266,7 @@ fun AppScreenItem(
                             RiscOsColors.lightGray
                     ) {
                         RiscOsLabel(
-                            text = orientation.icon,
+                            text = getOrientationIcon(orientation),
                             color = if (setting.orientation == orientation)
                                 RiscOsColors.white
                             else
@@ -382,5 +372,19 @@ fun AppScreenItem(
                 }
             }
         }
+    }
+}
+
+/**
+ * Get icon/symbol for orientation
+ */
+private fun getOrientationIcon(orientation: ScreenOrientation): String {
+    return when (orientation) {
+        ScreenOrientation.Unspecified -> "⟲"
+        ScreenOrientation.Portrait -> "☰"
+        ScreenOrientation.Landscape -> "☷"
+        ScreenOrientation.ReversePortrait -> "⥯"
+        ScreenOrientation.ReverseLandscape -> "⥮"
+        ScreenOrientation.Sensor -> "◎"
     }
 }
