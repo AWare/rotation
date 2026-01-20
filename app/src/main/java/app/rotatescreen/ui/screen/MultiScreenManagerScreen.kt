@@ -11,6 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import app.rotatescreen.domain.model.AspectRatio
 import app.rotatescreen.domain.model.InstalledApp
 import app.rotatescreen.domain.model.ScreenOrientation
 import app.rotatescreen.domain.model.TargetScreen
@@ -190,9 +191,9 @@ fun ScreenAppsPanel(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     val icon = when (screen.ratio) {
-                        app.rotatescreen.domain.model.AspectRatio.PORTRAIT -> "▯"
-                        app.rotatescreen.domain.model.AspectRatio.LANDSCAPE -> "▬"
-                        app.rotatescreen.domain.model.AspectRatio.SQUARE -> "▪"
+                        AspectRatio.PORTRAIT -> "▯"
+                        AspectRatio.LANDSCAPE -> "▬"
+                        AspectRatio.SQUARE -> "▪"
                     }
                     RiscOsLabel(
                         text = icon,
@@ -406,9 +407,9 @@ fun AppScreenItem(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     val icon = when (targetScreen.ratio) {
-                                        app.rotatescreen.domain.model.AspectRatio.PORTRAIT -> "▯"
-                                        app.rotatescreen.domain.model.AspectRatio.LANDSCAPE -> "▬"
-                                        app.rotatescreen.domain.model.AspectRatio.SQUARE -> "▪"
+                                        AspectRatio.PORTRAIT -> "▯"
+                                        AspectRatio.LANDSCAPE -> "▬"
+                                        AspectRatio.SQUARE -> "▪"
                                     }
                                     RiscOsLabel(text = icon)
                                     RiscOsLabel(
@@ -496,9 +497,9 @@ fun UnconfiguredAppItem(
                             ) {
                                 // Screen header
                                 val icon = when (screen.ratio) {
-                                    app.rotatescreen.domain.model.AspectRatio.PORTRAIT -> "▯"
-                                    app.rotatescreen.domain.model.AspectRatio.LANDSCAPE -> "▬"
-                                    app.rotatescreen.domain.model.AspectRatio.SQUARE -> "▪"
+                                    AspectRatio.PORTRAIT -> "▯"
+                                    AspectRatio.LANDSCAPE -> "▬"
+                                    AspectRatio.SQUARE -> "▪"
                                 }
                                 RiscOsLabel(
                                     text = "$icon ${screen.displayName}",
