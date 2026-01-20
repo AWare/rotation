@@ -58,14 +58,10 @@ class CurrentAppTileService : TileService() {
     override fun onClick() {
         super.onClick()
 
-        val packageName = currentAppPackage
-        android.util.Log.d("CurrentAppTileService", "onClick: packageName=$packageName")
-
-        if (packageName != null) {
-            // Just cycle through orientations and save
-            cycleOrientation(packageName)
-        } else {
-            android.util.Log.w("CurrentAppTileService", "No current app package - trying to refresh")
+        // First check permission
+        val hasPermission = checkUsageStatsPermission()
+        if (!hasPermission) {
+            android.util.Log.w("CurrentAppTileService", "No usage stats permission - opening settings")
 
             // Show helpful message and open settings
             android.widget.Toast.makeText(
@@ -88,6 +84,34 @@ class CurrentAppTileService : TileService() {
                 state = Tile.STATE_INACTIVE
                 label = "Needs Usage Access"
                 contentDescription = "Grant Usage Access permission to detect current app"
+                updateTile()
+            }
+            return
+        }
+
+        // Refresh current app detection
+        updateCurrentApp()
+
+        val packageName = currentAppPackage
+        android.util.Log.d("CurrentAppTileService", "onClick: packageName=$packageName, hasPermission=$hasPermission")
+
+        if (packageName != null) {
+            // Just cycle through orientations and save
+            cycleOrientation(packageName)
+        } else {
+            android.util.Log.w("CurrentAppTileService", "No current app package detected")
+
+            // Show info message
+            android.widget.Toast.makeText(
+                this,
+                "No foreground app detected. Open an app first.",
+                android.widget.Toast.LENGTH_SHORT
+            ).show()
+
+            qsTile?.apply {
+                state = Tile.STATE_INACTIVE
+                label = "Current App"
+                contentDescription = "No foreground app detected"
                 updateTile()
             }
         }
@@ -174,6 +198,19 @@ class CurrentAppTileService : TileService() {
     }
 
     private fun updateCurrentApp() {
+        // First check if we have usage stats permission
+        val hasPermission = checkUsageStatsPermission()
+        if (!hasPermission) {
+            android.util.Log.w("CurrentAppTileService", "Usage stats permission not granted")
+            qsTile?.apply {
+                state = Tile.STATE_INACTIVE
+                label = "Current App"
+                contentDescription = "Tap to grant Usage Access permission"
+                updateTile()
+            }
+            return
+        }
+
         val packageName = getCurrentForegroundApp()
         android.util.Log.d("CurrentAppTileService", "updateCurrentApp: detected packageName=$packageName")
 
@@ -215,6 +252,34 @@ class CurrentAppTileService : TileService() {
     }
 
     /**
+     * Check if usage stats permission is granted
+     */
+    private fun checkUsageStatsPermission(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP_MR1) {
+            return false
+        }
+
+        val usageStatsManager = getSystemService(USAGE_STATS_SERVICE) as? android.app.usage.UsageStatsManager
+            ?: return false
+
+        val endTime = System.currentTimeMillis()
+        val startTime = endTime - 1000 * 60 // Last minute
+
+        // Try to query usage stats - if we can't, we don't have permission
+        return try {
+            val stats = usageStatsManager.queryUsageStats(
+                android.app.usage.UsageStatsManager.INTERVAL_DAILY,
+                startTime,
+                endTime
+            )
+            stats != null && stats.isNotEmpty()
+        } catch (e: Exception) {
+            android.util.Log.e("CurrentAppTileService", "Permission check failed", e)
+            false
+        }
+    }
+
+    /**
      * Get the current foreground app package using UsageEvents API
      * This is more reliable than queryUsageStats for real-time detection
      * FP: Uses immutable data structures and pure transformations
@@ -233,10 +298,17 @@ class CurrentAppTileService : TileService() {
 
         return try {
             val endTime = System.currentTimeMillis()
-            val startTime = endTime - 1000 * 60 * 5 // Last 5 minutes
+            val startTime = endTime - 1000 * 60 * 10 // Last 10 minutes (increased from 5)
 
             // FP: Extract events to immutable list
             val foregroundEvents = extractForegroundEvents(usageStatsManager, startTime, endTime)
+
+            android.util.Log.d("CurrentAppTileService", "Found ${foregroundEvents.size} foreground events")
+
+            if (foregroundEvents.isEmpty()) {
+                android.util.Log.w("CurrentAppTileService", "No foreground events found in last 10 minutes")
+                return null
+            }
 
             // FP: Find most recent using pure function (maxByOrNull)
             val mostRecent = foregroundEvents.maxByOrNull { it.timestamp }
