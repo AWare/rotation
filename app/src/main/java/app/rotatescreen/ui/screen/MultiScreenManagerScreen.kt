@@ -11,6 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import app.rotatescreen.domain.model.InstalledApp
 import app.rotatescreen.domain.model.ScreenOrientation
 import app.rotatescreen.domain.model.TargetScreen
 import app.rotatescreen.ui.MainViewModel
@@ -28,6 +29,8 @@ fun MultiScreenManagerScreen(
 ) {
     val state by viewModel.state.collectAsState()
     val availableScreens by viewModel.availableScreens.collectAsState()
+    val appFilter by viewModel.appFilter.collectAsState()
+    val filteredApps by viewModel.filteredApps.collectAsState()
 
     // Get only specific screens (not AllScreens)
     val specificScreens = availableScreens.filterIsInstance<TargetScreen.SpecificScreen>()
@@ -38,6 +41,10 @@ fun MultiScreenManagerScreen(
         .mapKeys { (screen, _) ->
             specificScreens.find { it.id == screen.id } ?: screen
         }
+
+    // When showing running apps, include unconfigured apps
+    val showRunningApps = appFilter == "open"
+    val runningApps = if (showRunningApps) filteredApps else emptyList()
 
     MottledBackground(
         modifier = Modifier.fillMaxSize()
@@ -79,6 +86,35 @@ fun MultiScreenManagerScreen(
                 )
             }
 
+            // Filter indicator
+            if (showRunningApps) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(RiscOsColors.actionGreen)
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    RiscOsLabel(
+                        text = "Showing: Running Apps (${runningApps.size})",
+                        fontWeight = FontWeight.Bold,
+                        color = RiscOsColors.white
+                    )
+                    RiscOsButton(
+                        onClick = { viewModel.clearAppFilter() },
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                        backgroundColor = RiscOsColors.white
+                    ) {
+                        RiscOsLabel(
+                            text = "✕ Clear Filter",
+                            fontWeight = FontWeight.Bold,
+                            color = RiscOsColors.black
+                        )
+                    }
+                }
+            }
+
             // Show panel for each screen
             specificScreens.forEach { screen ->
                 val appsOnScreen = settingsByScreen[screen] ?: emptyList()
@@ -91,21 +127,35 @@ fun MultiScreenManagerScreen(
                 )
             }
 
-            // Show apps with no screen-specific settings
-            val appsWithNoSettings = state.perAppSettings
-                .filter { (_, settings) -> settings.isEmpty() }
-                .keys
-                .toList()
+            // Show running apps without settings
+            if (showRunningApps) {
+                val configuredPackages = state.perAppSettings.keys
+                val unconfiguredRunningApps = runningApps.filter { app ->
+                    app.packageName !in configuredPackages
+                }
 
-            if (appsWithNoSettings.isNotEmpty()) {
-                RiscOsWindow(
-                    title = "Apps Without Settings",
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    RiscOsLabel(
-                        text = "${appsWithNoSettings.size} apps have no orientation settings",
-                        color = RiscOsColors.darkGray
-                    )
+                if (unconfiguredRunningApps.isNotEmpty()) {
+                    RiscOsWindow(
+                        title = "Running Apps Without Settings (${unconfiguredRunningApps.size})",
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            RiscOsLabel(
+                                text = "These apps are currently running but have no orientation settings. Tap to configure:",
+                                color = RiscOsColors.darkGray
+                            )
+
+                            unconfiguredRunningApps.forEach { app ->
+                                UnconfiguredAppItem(
+                                    app = app,
+                                    availableScreens = specificScreens,
+                                    viewModel = viewModel
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -365,6 +415,124 @@ fun AppScreenItem(
                                         text = targetScreen.displayName,
                                         fontWeight = FontWeight.Bold
                                     )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Item for unconfigured running apps - allows quick setup
+ */
+@Composable
+fun UnconfiguredAppItem(
+    app: app.rotatescreen.domain.model.InstalledApp,
+    availableScreens: List<TargetScreen.SpecificScreen>,
+    viewModel: MainViewModel
+) {
+    var showConfigOptions by remember { mutableStateOf(false) }
+
+    RiscOsPanel(
+        modifier = Modifier.fillMaxWidth(),
+        backgroundColor = RiscOsColors.white
+    ) {
+        Column(
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            // App name
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    RiscOsLabel(
+                        text = app.appName,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1
+                    )
+                    RiscOsLabel(
+                        text = app.packageName,
+                        color = RiscOsColors.darkGray,
+                        maxLines = 1
+                    )
+                }
+
+                RiscOsButton(
+                    onClick = { showConfigOptions = !showConfigOptions },
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                    backgroundColor = RiscOsColors.actionBlue
+                ) {
+                    RiscOsLabel(
+                        text = if (showConfigOptions) "▲ Hide" else "▼ Configure",
+                        fontWeight = FontWeight.Bold,
+                        color = RiscOsColors.white
+                    )
+                }
+            }
+
+            // Configuration options
+            if (showConfigOptions) {
+                RiscOsPanel(
+                    modifier = Modifier.fillMaxWidth(),
+                    inset = true,
+                    backgroundColor = RiscOsColors.actionBlue.copy(alpha = 0.1f)
+                ) {
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        RiscOsLabel(
+                            text = "Select screen and orientation:",
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        availableScreens.forEach { screen ->
+                            Column(
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                // Screen header
+                                val icon = when (screen.ratio) {
+                                    app.rotatescreen.domain.model.AspectRatio.PORTRAIT -> "▯"
+                                    app.rotatescreen.domain.model.AspectRatio.LANDSCAPE -> "▬"
+                                    app.rotatescreen.domain.model.AspectRatio.SQUARE -> "▪"
+                                }
+                                RiscOsLabel(
+                                    text = "$icon ${screen.displayName}",
+                                    fontWeight = FontWeight.Bold,
+                                    color = RiscOsColors.actionBlue
+                                )
+
+                                // Orientation buttons
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    ScreenOrientation.all().forEach { orientation ->
+                                        RiscOsButton(
+                                            onClick = {
+                                                viewModel.setAppTargetScreen(app.packageName, screen)
+                                                viewModel.setAppOrientation(
+                                                    app.packageName,
+                                                    app.appName,
+                                                    orientation
+                                                )
+                                                showConfigOptions = false
+                                            },
+                                            modifier = Modifier.weight(1f),
+                                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp),
+                                            backgroundColor = RiscOsColors.white
+                                        ) {
+                                            RiscOsLabel(
+                                                text = getOrientationIcon(orientation),
+                                                color = RiscOsColors.black,
+                                                maxLines = 1
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }

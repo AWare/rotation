@@ -89,31 +89,22 @@ class CurrentAppTileService : TileService() {
             return
         }
 
-        // Refresh current app detection
-        updateCurrentApp()
-
-        val packageName = currentAppPackage
-        android.util.Log.d("CurrentAppTileService", "onClick: packageName=$packageName, hasPermission=$hasPermission")
-
-        if (packageName != null) {
-            // Just cycle through orientations and save
-            cycleOrientation(packageName)
-        } else {
-            android.util.Log.w("CurrentAppTileService", "No current app package detected")
-
-            // Show info message
+        // Open Multi-Screen Manager to show running apps and manage orientations
+        try {
+            val intent = Intent(this, MainActivity::class.java).apply {
+                putExtra(MainActivity.EXTRA_SCREEN, "multi_screen_manager")
+                putExtra(MainActivity.EXTRA_FILTER, MainActivity.FILTER_OPEN)
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            }
+            startActivityAndCollapse(intent)
+            android.util.Log.d("CurrentAppTileService", "Opened Multi-Screen Manager")
+        } catch (e: Exception) {
+            android.util.Log.e("CurrentAppTileService", "Failed to open Multi-Screen Manager", e)
             android.widget.Toast.makeText(
                 this,
-                "No foreground app detected. Open an app first.",
+                "Failed to open app manager",
                 android.widget.Toast.LENGTH_SHORT
             ).show()
-
-            qsTile?.apply {
-                state = Tile.STATE_INACTIVE
-                label = "Current App"
-                contentDescription = "No foreground app detected"
-                updateTile()
-            }
         }
     }
 
