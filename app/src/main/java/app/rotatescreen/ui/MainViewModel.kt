@@ -553,6 +553,49 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /**
+     * Get the current foreground app package name
+     * Returns null if no app is detected or permission is missing
+     */
+    fun getCurrentForegroundApp(): String? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP_MR1) {
+            return null
+        }
+
+        return try {
+            val usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE)
+                as? android.app.usage.UsageStatsManager
+                ?: return null
+
+            val endTime = System.currentTimeMillis()
+            val startTime = endTime - 1000 * 60 * 10 // Last 10 minutes
+
+            val usageEvents = usageStatsManager.queryEvents(startTime, endTime)
+            var mostRecentPackage: String? = null
+            var mostRecentTimestamp = 0L
+
+            while (usageEvents.hasNextEvent()) {
+                val event = android.app.usage.UsageEvents.Event()
+                usageEvents.getNextEvent(event)
+
+                // Track most recent foreground event
+                if (event.eventType == android.app.usage.UsageEvents.Event.ACTIVITY_RESUMED ||
+                    event.eventType == android.app.usage.UsageEvents.Event.MOVE_TO_FOREGROUND) {
+                    if (event.timeStamp > mostRecentTimestamp) {
+                        mostRecentTimestamp = event.timeStamp
+                        mostRecentPackage = event.packageName
+                    }
+                }
+            }
+
+            // Don't return our own package
+            if (mostRecentPackage == context.packageName) null else mostRecentPackage
+        } catch (e: Exception) {
+            android.util.Log.e("MainViewModel", "Error getting current foreground app", e)
+            null
+        }
+    }
+
     fun requestDrawOverlayPermission() {
         val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION).apply {
             data = Uri.parse("package:${context.packageName}")

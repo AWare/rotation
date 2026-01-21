@@ -29,6 +29,18 @@ fun MultiScreenManagerScreen(
 ) {
     val state by viewModel.state.collectAsState()
     val availableScreens by viewModel.availableScreens.collectAsState()
+    val installedApps by viewModel.installedApps.collectAsState()
+
+    // Get current foreground app
+    var currentForegroundPackage by remember { mutableStateOf<String?>(null) }
+    var currentForegroundApp by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(Unit) {
+        currentForegroundPackage = viewModel.getCurrentForegroundApp()
+        currentForegroundApp = currentForegroundPackage?.let { pkg ->
+            installedApps.find { it.packageName == pkg }?.appName ?: pkg
+        }
+    }
 
     // Get only specific screens (not AllScreens)
     val specificScreens = availableScreens.filterIsInstance<TargetScreen.SpecificScreen>()
@@ -78,6 +90,94 @@ fun MultiScreenManagerScreen(
                     fontWeight = FontWeight.Bold,
                     style = MaterialTheme.typography.titleLarge
                 )
+            }
+
+            // Show current foreground app
+            if (currentForegroundPackage != null && currentForegroundApp != null) {
+                RiscOsWindow(
+                    title = "▶ Current Foreground App",
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        RiscOsLabel(
+                            text = currentForegroundApp!!,
+                            fontWeight = FontWeight.Bold,
+                            color = RiscOsColors.actionGreen
+                        )
+                        RiscOsLabel(
+                            text = currentForegroundPackage!!,
+                            color = RiscOsColors.darkGray
+                        )
+
+                        // Show current settings for this app
+                        val currentSettings = state.perAppSettings[currentForegroundPackage]
+                        if (currentSettings != null && currentSettings.isNotEmpty()) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            RiscOsLabel(
+                                text = "Configured on ${currentSettings.size} screen(s)",
+                                color = RiscOsColors.actionBlue,
+                                fontWeight = FontWeight.Bold
+                            )
+                        } else {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            RiscOsLabel(
+                                text = "⚠ No orientation settings configured",
+                                color = RiscOsColors.actionRed,
+                                fontWeight = FontWeight.Bold
+                            )
+
+                            // Quick add buttons for each screen
+                            Text(
+                                text = "Quick Add:",
+                                color = RiscOsColors.black,
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                specificScreens.forEach { screen ->
+                                    RiscOsButton(
+                                        onClick = {
+                                            viewModel.setAppTargetScreen(currentForegroundPackage!!, screen)
+                                            viewModel.setAppOrientation(
+                                                currentForegroundPackage!!,
+                                                currentForegroundApp!!,
+                                                ScreenOrientation.Sensor
+                                            )
+                                        },
+                                        modifier = Modifier.weight(1f),
+                                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp),
+                                        backgroundColor = RiscOsColors.actionGreen.copy(alpha = 0.3f)
+                                    ) {
+                                        Column(
+                                            horizontalAlignment = Alignment.CenterHorizontally
+                                        ) {
+                                            val icon = when (screen.ratio) {
+                                                AspectRatio.PORTRAIT -> "▯"
+                                                AspectRatio.LANDSCAPE -> "▬"
+                                                AspectRatio.SQUARE -> "▪"
+                                            }
+                                            RiscOsLabel(
+                                                text = icon,
+                                                fontWeight = FontWeight.Bold,
+                                                color = RiscOsColors.black
+                                            )
+                                            RiscOsLabel(
+                                                text = screen.displayName,
+                                                color = RiscOsColors.black,
+                                                maxLines = 1
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
 
             // Show panel for each screen
