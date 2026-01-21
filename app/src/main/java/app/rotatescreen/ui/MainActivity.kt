@@ -138,18 +138,10 @@ fun RotationNavHost(
         }
     }
 
-    // Apply filter if provided
-    LaunchedEffect(initialFilter) {
-        if (initialFilter != null) {
-            viewModel.setAppFilter(initialFilter)
-        }
-    }
-
     // Determine start destination based on initial parameters
     val startDestination = when {
         initialPackage != null -> Screen.AppConfig.createRoute(initialPackage)
         initialScreen == "multi_screen_manager" -> Screen.MultiScreenManager.route
-        initialFilter != null -> Screen.PerApp.route
         else -> Screen.Global.route
     }
 

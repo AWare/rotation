@@ -89,11 +89,10 @@ class CurrentAppTileService : TileService() {
             return
         }
 
-        // Open Multi-Screen Manager to show running apps and manage orientations
+        // Open Multi-Screen Manager to manage app orientations
         try {
             val intent = Intent(this, MainActivity::class.java).apply {
                 putExtra(MainActivity.EXTRA_SCREEN, "multi_screen_manager")
-                putExtra(MainActivity.EXTRA_FILTER, MainActivity.FILTER_OPEN)
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
             }
             startActivityAndCollapse(intent)
