@@ -11,6 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import app.rotatescreen.domain.model.AppOrientationSetting
 import app.rotatescreen.domain.model.AspectRatio
 import app.rotatescreen.domain.model.ScreenOrientation
 import app.rotatescreen.domain.model.TargetScreen
@@ -129,11 +130,10 @@ fun MultiScreenManagerScreen(
                             )
 
                             // Quick add buttons for each screen
-                            Text(
+                            RiscOsLabel(
                                 text = "Quick Add:",
                                 color = RiscOsColors.black,
-                                fontWeight = FontWeight.Bold,
-                                style = MaterialTheme.typography.bodySmall
+                                fontWeight = FontWeight.Bold
                             )
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -201,7 +201,7 @@ fun MultiScreenManagerScreen(
 @Composable
 fun ScreenAppsPanel(
     screen: TargetScreen.SpecificScreen,
-    apps: List<app.rotatescreen.domain.model.AppOrientationSetting>,
+    apps: List<AppOrientationSetting>,
     allScreens: List<TargetScreen.SpecificScreen>,
     viewModel: MainViewModel
 ) {
@@ -280,7 +280,7 @@ fun ScreenAppsPanel(
  */
 @Composable
 fun AppScreenItem(
-    setting: app.rotatescreen.domain.model.AppOrientationSetting,
+    setting: AppOrientationSetting,
     currentScreen: TargetScreen.SpecificScreen,
     availableScreens: List<TargetScreen.SpecificScreen>,
     viewModel: MainViewModel

@@ -49,9 +49,6 @@ class MainActivity : ComponentActivity() {
                 pkg.matches(Regex("^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)*$"))
             }
 
-        // Get filter from intent
-        val filter = intent?.getStringExtra(EXTRA_FILTER)
-
         // Get target screen from intent
         val targetScreen = intent?.getStringExtra(EXTRA_SCREEN)
 
@@ -64,7 +61,6 @@ class MainActivity : ComponentActivity() {
                     RotationNavHost(
                         viewModel = viewModel,
                         initialPackage = targetPackage,
-                        initialFilter = filter,
                         initialScreen = targetScreen
                     )
                 }
@@ -96,9 +92,7 @@ class MainActivity : ComponentActivity() {
 
     companion object {
         const val EXTRA_TARGET_PACKAGE = "target_package"
-        const val EXTRA_FILTER = "filter"
         const val EXTRA_SCREEN = "screen"
-        const val FILTER_OPEN = "open"
     }
 }
 
@@ -106,7 +100,6 @@ class MainActivity : ComponentActivity() {
 fun RotationNavHost(
     viewModel: MainViewModel,
     initialPackage: String? = null,
-    initialFilter: String? = null,
     initialScreen: String? = null
 ) {
     val context = LocalContext.current
