@@ -21,13 +21,14 @@ import kotlinx.coroutines.launch
  */
 class OrientationTileService : TileService() {
 
-    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private var serviceScope: CoroutineScope? = null
     private var preferencesManager: PreferencesManager? = null
     private var currentOrientation: ScreenOrientation = ScreenOrientation.Unspecified
 
     override fun onCreate() {
         super.onCreate()
         try {
+            serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
             preferencesManager = PreferencesManager(applicationContext)
             android.util.Log.d("OrientationTileService", "Tile initialized successfully")
         } catch (e: Exception) {
@@ -38,12 +39,13 @@ class OrientationTileService : TileService() {
     override fun onStartListening() {
         super.onStartListening()
         val manager = preferencesManager
-        if (manager == null) {
-            android.util.Log.w("OrientationTileService", "PreferencesManager not initialized")
+        val scope = serviceScope
+        if (manager == null || scope == null) {
+            android.util.Log.w("OrientationTileService", "Tile not initialized")
             return
         }
 
-        serviceScope.launch {
+        scope.launch {
             currentOrientation = manager.lastTileOrientation.firstOrNull()
                 ?: ScreenOrientation.Unspecified
             updateTile(currentOrientation)
@@ -53,8 +55,9 @@ class OrientationTileService : TileService() {
     override fun onClick() {
         super.onClick()
         val manager = preferencesManager
-        if (manager == null) {
-            android.util.Log.w("OrientationTileService", "PreferencesManager not initialized")
+        val scope = serviceScope
+        if (manager == null || scope == null) {
+            android.util.Log.w("OrientationTileService", "Tile not initialized")
             qsTile?.apply {
                 state = Tile.STATE_INACTIVE
                 label = "Not Ready"
@@ -63,7 +66,7 @@ class OrientationTileService : TileService() {
             return
         }
 
-        serviceScope.launch {
+        scope.launch {
             // Cycle through orientations
             val nextOrientation = currentOrientation.next()
             currentOrientation = nextOrientation
@@ -101,7 +104,9 @@ class OrientationTileService : TileService() {
     }
 
     override fun onDestroy() {
-        serviceScope.cancel()
+        serviceScope?.cancel()
+        serviceScope = null
+        preferencesManager = null
         super.onDestroy()
     }
 }

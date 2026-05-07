@@ -1,169 +1,77 @@
 package app.rotatescreen.ui
 
-import android.content.Intent
 import org.junit.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
 class MainActivityTest {
 
-    @Test
-    fun `valid package name passes validation`() {
-        // Arrange
-        val packageName = "com.example.app"
+    // Mirror MainActivity.PACKAGE_NAME_REGEX for unit testing without instantiating the Activity.
+    // Android package names: identifiers separated by dots; identifiers may start with any letter
+    // (uppercase or lowercase) and may contain letters, digits, and underscores. At least one
+    // dot is required because all real Android package names are namespaced.
+    private val regex = Regex("^[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z][A-Za-z0-9_]*)+$")
 
-        // Act
-        val result = packageName.takeIf { pkg ->
-            pkg.isNotBlank() &&
-            pkg.length <= 255 &&
-            pkg.matches(Regex("^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)*$"))
-        }
-
-        // Assert
-        assertEquals("com.example.app", result)
+    private fun validate(pkg: String): String? = pkg.takeIf {
+        it.isNotBlank() && it.length <= 255 && regex.matches(it)
     }
 
     @Test
-    fun `package name with uppercase is rejected`() {
-        // Arrange
-        val packageName = "com.Example.App"
+    fun `valid lowercase package name passes validation`() {
+        assertEquals("com.example.app", validate("com.example.app"))
+    }
 
-        // Act
-        val result = packageName.takeIf { pkg ->
-            pkg.isNotBlank() &&
-            pkg.length <= 255 &&
-            pkg.matches(Regex("^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)*$"))
-        }
-
-        // Assert
-        assertNull(result)
+    @Test
+    fun `package name with uppercase is accepted`() {
+        // Real apps ship uppercase identifiers (e.g. com.UCMobile.intl). The previous
+        // all-lowercase regex incorrectly rejected them.
+        assertEquals("com.UCMobile.intl", validate("com.UCMobile.intl"))
     }
 
     @Test
     fun `empty package name is rejected`() {
-        // Arrange
-        val packageName = ""
-
-        // Act
-        val result = packageName.takeIf { pkg ->
-            pkg.isNotBlank() &&
-            pkg.length <= 255 &&
-            pkg.matches(Regex("^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)*$"))
-        }
-
-        // Assert
-        assertNull(result)
+        assertNull(validate(""))
     }
 
     @Test
     fun `blank package name is rejected`() {
-        // Arrange
-        val packageName = "   "
-
-        // Act
-        val result = packageName.takeIf { pkg ->
-            pkg.isNotBlank() &&
-            pkg.length <= 255 &&
-            pkg.matches(Regex("^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)*$"))
-        }
-
-        // Assert
-        assertNull(result)
+        assertNull(validate("   "))
     }
 
     @Test
     fun `package name exceeding 255 chars is rejected`() {
-        // Arrange
-        val packageName = "com." + "a".repeat(252) // Total > 255
-
-        // Act
-        val result = packageName.takeIf { pkg ->
-            pkg.isNotBlank() &&
-            pkg.length <= 255 &&
-            pkg.matches(Regex("^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)*$"))
-        }
-
-        // Assert
-        assertNull(result)
+        val pkg = "com." + "a".repeat(252) // length > 255
+        assertNull(validate(pkg))
     }
 
     @Test
     fun `package name with special characters is rejected`() {
-        // Arrange
-        val packageName = "com.example.app@test"
-
-        // Act
-        val result = packageName.takeIf { pkg ->
-            pkg.isNotBlank() &&
-            pkg.length <= 255 &&
-            pkg.matches(Regex("^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)*$"))
-        }
-
-        // Assert
-        assertNull(result)
+        assertNull(validate("com.example.app@test"))
     }
 
     @Test
-    fun `package name starting with number is rejected`() {
-        // Arrange
-        val packageName = "1com.example.app"
-
-        // Act
-        val result = packageName.takeIf { pkg ->
-            pkg.isNotBlank() &&
-            pkg.length <= 255 &&
-            pkg.matches(Regex("^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)*$"))
-        }
-
-        // Assert
-        assertNull(result)
+    fun `package name starting with a digit is rejected`() {
+        assertNull(validate("1com.example.app"))
     }
 
     @Test
     fun `package name with underscores is valid`() {
-        // Arrange
-        val packageName = "com.example.my_app"
-
-        // Act
-        val result = packageName.takeIf { pkg ->
-            pkg.isNotBlank() &&
-            pkg.length <= 255 &&
-            pkg.matches(Regex("^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)*$"))
-        }
-
-        // Assert
-        assertEquals("com.example.my_app", result)
+        assertEquals("com.example.my_app", validate("com.example.my_app"))
     }
 
     @Test
     fun `package name with numbers is valid`() {
-        // Arrange
-        val packageName = "com.example.app123"
-
-        // Act
-        val result = packageName.takeIf { pkg ->
-            pkg.isNotBlank() &&
-            pkg.length <= 255 &&
-            pkg.matches(Regex("^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)*$"))
-        }
-
-        // Assert
-        assertEquals("com.example.app123", result)
+        assertEquals("com.example.app123", validate("com.example.app123"))
     }
 
     @Test
-    fun `single segment package name is valid`() {
-        // Arrange
-        val packageName = "app"
+    fun `single segment package name is rejected`() {
+        // Android requires at least one dot; "app" alone is not a valid package name.
+        assertNull(validate("app"))
+    }
 
-        // Act
-        val result = packageName.takeIf { pkg ->
-            pkg.isNotBlank() &&
-            pkg.length <= 255 &&
-            pkg.matches(Regex("^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)*$"))
-        }
-
-        // Assert
-        assertEquals("app", result)
+    @Test
+    fun `segment starting with a digit is rejected`() {
+        assertNull(validate("com.0example.app"))
     }
 }

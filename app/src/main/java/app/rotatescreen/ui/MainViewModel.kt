@@ -33,11 +33,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val context: Context = application.applicationContext
     private val repository: OrientationRepository
     private val preferencesManager: PreferencesManager
-    private val displayManager: DisplayManager by lazy {
-        val service = context.getSystemService(Context.DISPLAY_SERVICE)
-        if (service is DisplayManager) service
-        else throw IllegalStateException("DisplayManager not available")
+    private val displayManager: DisplayManager? by lazy {
+        context.getSystemService(Context.DISPLAY_SERVICE) as? DisplayManager
     }
+    private var displayListenerRegistered = false
 
     private val _state = MutableStateFlow(OrientationState())
     val state: StateFlow<OrientationState> = _state.asStateFlow()
@@ -113,13 +112,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         checkPermissions()
 
         // Register display listener for hot-swap detection
-        displayManager.registerDisplayListener(displayListener, null)
+        try {
+            displayManager?.registerDisplayListener(displayListener, null)
+            displayListenerRegistered = displayManager != null
+        } catch (e: Exception) {
+            android.util.Log.e("MainViewModel", "Failed to register display listener", e)
+        }
     }
 
     override fun onCleared() {
         super.onCleared()
-        // Unregister display listener
-        displayManager.unregisterDisplayListener(displayListener)
+        // Unregister display listener (only if registration succeeded)
+        if (displayListenerRegistered) {
+            try {
+                displayManager?.unregisterDisplayListener(displayListener)
+            } catch (e: Exception) {
+                android.util.Log.e("MainViewModel", "Failed to unregister display listener", e)
+            }
+        }
     }
 
     private fun handleDisplayDisconnected(displayId: Int) {
@@ -147,7 +157,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun cleanupOrphanedSettings() {
         viewModelScope.launch {
             try {
-                val currentDisplayIds = displayManager.displays.map { it.displayId }.toSet()
+                val currentDisplayIds = displayManager?.displays?.map { it.displayId }?.toSet() ?: return@launch
                 val allSettings = repository.getAllSettings().firstOrNull() ?: return@launch
 
                 allSettings.forEach { setting ->
@@ -172,7 +182,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      */
     suspend fun getEffectiveOrientationForApp(packageName: String, displayId: Int): ScreenOrientation? {
         try {
-            val display = displayManager.displays.find { it.displayId == displayId }
+            val dm = displayManager ?: return null
+            val display = dm.displays.find { it.displayId == displayId }
                 ?: return null
 
             val metrics = android.util.DisplayMetrics()
@@ -183,7 +194,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 else -> AspectRatio.LANDSCAPE
             }
 
-            val availableDisplayIds = displayManager.displays.map { it.displayId }.toSet()
+            val availableDisplayIds = dm.displays.map { it.displayId }.toSet()
 
             val setting = repository.getEffectiveOrientation(
                 packageName = packageName,
@@ -326,7 +337,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private fun loadAvailableDisplays() {
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val displays = displayManager.displays
+                val displays = displayManager?.displays ?: emptyArray<Display>()
 
                 // First pass: collect display info with ratios
                 data class DisplayInfo(
@@ -656,7 +667,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             // Get display information if specific screen
             var displayInfo = ""
             if (targetScreen is TargetScreen.SpecificScreen) {
-                val display = displayManager.displays.find { it.displayId == targetScreen.id }
+                val display = displayManager?.displays?.find { it.displayId == targetScreen.id }
                 if (display != null) {
                     val metrics = android.util.DisplayMetrics()
                     display.getMetrics(metrics)

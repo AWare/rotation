@@ -1,10 +1,7 @@
 package app.rotatescreen.tile
 
-import android.app.ActivityManager
 import android.app.PendingIntent
-import android.content.Context
 import android.content.Intent
-import android.hardware.display.DisplayManager
 import android.os.Build
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
@@ -14,7 +11,6 @@ import app.rotatescreen.domain.model.AppOrientationSetting
 import app.rotatescreen.domain.model.ScreenOrientation
 import app.rotatescreen.domain.model.TargetScreen
 import app.rotatescreen.service.OrientationControlService
-import app.rotatescreen.service.OrientationSelectorOverlayService
 import app.rotatescreen.ui.MainActivity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -29,10 +25,8 @@ class CurrentAppTileService : TileService() {
 
     private var serviceScope: CoroutineScope? = null
     private var repository: OrientationRepository? = null
+    @Volatile
     private var currentAppPackage: String? = null
-    private val displayManager by lazy {
-        getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
-    }
 
     private val orientationCycle = listOf(
         ScreenOrientation.Unspecified,

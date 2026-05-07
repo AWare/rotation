@@ -43,7 +43,10 @@ class ForegroundAppDetectorService : AccessibilityService() {
     // Track launcher packages for better exit detection
     private val launcherPackages = MutableStateFlow<Set<String>>(emptySet())
 
-    // Debouncing: track last event timestamp
+    // Debouncing: track last event timestamp. Volatile because accessibility
+    // events can be delivered from arbitrary threads and the read-modify-write
+    // below would otherwise race.
+    @Volatile
     private var lastEventTimestamp = 0L
     private val debounceDelayMs = 150L // Ignore events within 150ms of each other
 

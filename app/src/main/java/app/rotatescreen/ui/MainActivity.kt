@@ -41,15 +41,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Get package name from intent if launched from tile, with validation
-        val targetPackage = intent?.getStringExtra(EXTRA_TARGET_PACKAGE)
-            ?.takeIf { pkg ->
-                pkg.isNotBlank() &&
-                pkg.length <= 255 &&
-                pkg.matches(Regex("^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)*$"))
-            }
-
-        // Get target screen from intent
+        val targetPackage = extractTargetPackage(intent)
         val targetScreen = intent?.getStringExtra(EXTRA_SCREEN)
 
         setContent {
@@ -65,6 +57,15 @@ class MainActivity : ComponentActivity() {
                     )
                 }
             }
+        }
+    }
+
+    override fun onNewIntent(newIntent: android.content.Intent?) {
+        super.onNewIntent(newIntent)
+        // Update the activity's intent so any onCreate-style restart sees the
+        // latest extras instead of stale ones from the original launch.
+        if (newIntent != null) {
+            intent = newIntent
         }
     }
 
@@ -93,6 +94,18 @@ class MainActivity : ComponentActivity() {
     companion object {
         const val EXTRA_TARGET_PACKAGE = "target_package"
         const val EXTRA_SCREEN = "screen"
+
+        // Android package names: identifiers separated by dots. Each identifier
+        // must start with a letter (case-insensitive) and may contain letters,
+        // digits, and underscores. Real apps use uppercase (e.g. com.UCMobile.intl),
+        // so the regex must permit it. At least one dot is required.
+        private val PACKAGE_NAME_REGEX =
+            Regex("^[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z][A-Za-z0-9_]*)+$")
+
+        internal fun extractTargetPackage(intent: android.content.Intent?): String? =
+            intent?.getStringExtra(EXTRA_TARGET_PACKAGE)?.takeIf { pkg ->
+                pkg.isNotBlank() && pkg.length <= 255 && PACKAGE_NAME_REGEX.matches(pkg)
+            }
     }
 }
 
