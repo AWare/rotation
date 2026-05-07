@@ -9,4 +9,6 @@ sealed class Screen(val route: String) {
     object AppConfig : Screen("app_config/{packageName}") {
         fun createRoute(packageName: String) = "app_config/$packageName"
     }
+    object LogViewer : Screen("log_viewer")
+    object MultiScreenManager : Screen("multi_screen_manager")
 }

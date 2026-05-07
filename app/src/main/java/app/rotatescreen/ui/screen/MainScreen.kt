@@ -2,6 +2,8 @@ package app.rotatescreen.ui.screen
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -19,7 +21,9 @@ import app.rotatescreen.ui.components.*
 @Composable
 fun MainScreen(
     viewModel: MainViewModel,
-    onNavigateToPerApp: () -> Unit
+    onNavigateToPerApp: () -> Unit,
+    onNavigateToMultiScreenManager: () -> Unit = {},
+    onNavigateToLogs: () -> Unit = {}
 ) {
     val state by viewModel.state.collectAsState()
     val availableScreens by viewModel.availableScreens.collectAsState()
@@ -33,6 +37,7 @@ fun MainScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .verticalScroll(rememberScrollState())
                 .padding(8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
@@ -136,6 +141,54 @@ fun MainScreen(
                 ) {
                     RiscOsLabel(
                         text = "Configure Apps ▶",
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+
+        // Multi-Screen Manager button
+        RiscOsWindow(
+            title = "Multi-Screen Manager",
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                RiscOsLabel(
+                    text = "Manage apps across multiple screens. View and move apps between displays.",
+                    maxLines = 2
+                )
+
+                RiscOsButton(
+                    onClick = onNavigateToMultiScreenManager,
+                    modifier = Modifier.fillMaxWidth(),
+                    backgroundColor = RiscOsColors.actionBlue.copy(alpha = 0.3f)
+                ) {
+                    RiscOsLabel(
+                        text = "Manage Screens ▶",
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+
+        // Logs button
+        RiscOsWindow(
+            title = "Diagnostics",
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                RiscOsLabel(
+                    text = "View app logs for troubleshooting.",
+                    maxLines = 2
+                )
+
+                RiscOsButton(
+                    onClick = onNavigateToLogs,
+                    modifier = Modifier.fillMaxWidth(),
+                    backgroundColor = RiscOsColors.actionYellow.copy(alpha = 0.3f)
+                ) {
+                    RiscOsLabel(
+                        text = "View Logs ▶",
                         fontWeight = FontWeight.Bold
                     )
                 }

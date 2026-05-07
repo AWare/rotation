@@ -22,18 +22,29 @@ import kotlinx.coroutines.launch
 class OrientationTileService : TileService() {
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
-    private lateinit var preferencesManager: PreferencesManager
+    private var preferencesManager: PreferencesManager? = null
     private var currentOrientation: ScreenOrientation = ScreenOrientation.Unspecified
 
     override fun onCreate() {
         super.onCreate()
-        preferencesManager = PreferencesManager(applicationContext)
+        try {
+            preferencesManager = PreferencesManager(applicationContext)
+            android.util.Log.d("OrientationTileService", "Tile initialized successfully")
+        } catch (e: Exception) {
+            android.util.Log.e("OrientationTileService", "Failed to initialize tile", e)
+        }
     }
 
     override fun onStartListening() {
         super.onStartListening()
+        val manager = preferencesManager
+        if (manager == null) {
+            android.util.Log.w("OrientationTileService", "PreferencesManager not initialized")
+            return
+        }
+
         serviceScope.launch {
-            currentOrientation = preferencesManager.lastTileOrientation.firstOrNull()
+            currentOrientation = manager.lastTileOrientation.firstOrNull()
                 ?: ScreenOrientation.Unspecified
             updateTile(currentOrientation)
         }
@@ -41,13 +52,24 @@ class OrientationTileService : TileService() {
 
     override fun onClick() {
         super.onClick()
+        val manager = preferencesManager
+        if (manager == null) {
+            android.util.Log.w("OrientationTileService", "PreferencesManager not initialized")
+            qsTile?.apply {
+                state = Tile.STATE_INACTIVE
+                label = "Not Ready"
+                updateTile()
+            }
+            return
+        }
+
         serviceScope.launch {
             // Cycle through orientations
             val nextOrientation = currentOrientation.next()
             currentOrientation = nextOrientation
 
             // Save the new orientation
-            preferencesManager.setLastTileOrientation(nextOrientation)
+            manager.setLastTileOrientation(nextOrientation)
 
             // Apply the orientation
             applyOrientation(nextOrientation)

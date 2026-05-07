@@ -48,6 +48,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
 
+    private val _appFilter = MutableStateFlow<String?>(null)
+    val appFilter: StateFlow<String?> = _appFilter.asStateFlow()
+
     private val _availableScreens = MutableStateFlow<List<TargetScreen>>(listOf(TargetScreen.AllScreens))
     val availableScreens: StateFlow<List<TargetScreen>> = _availableScreens.asStateFlow()
 
@@ -55,14 +58,49 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val selectedGlobalScreen: StateFlow<TargetScreen> = _selectedGlobalScreen.asStateFlow()
 
     private val _selectedAppScreens = MutableStateFlow<Map<String, TargetScreen>>(emptyMap())
+    val selectedAppScreens: StateFlow<Map<String, TargetScreen>> = _selectedAppScreens.asStateFlow()
 
     val filteredApps: StateFlow<List<InstalledApp>> = combine(
         installedApps,
-        searchQuery
-    ) { apps, query ->
-        if (query.isBlank()) apps
-        else apps.filter { it.appName.contains(query, ignoreCase = true) }
+        searchQuery,
+        appFilter
+    ) { apps, query, filter ->
+        var result = apps
+
+        // Apply search query filter
+        if (query.isNotBlank()) {
+            result = result.filter { it.appName.contains(query, ignoreCase = true) }
+        }
+
+        // Apply special filters
+        when (filter) {
+            "open" -> {
+                // Get currently running apps
+                val runningPackages = getRunningApps()
+                result = result.filter { it.packageName in runningPackages }
+            }
+        }
+
+        result
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    private val displayListener = object : DisplayManager.DisplayListener {
+        override fun onDisplayAdded(displayId: Int) {
+            android.util.Log.d("MainViewModel", "Display added: $displayId")
+            loadAvailableDisplays()
+        }
+
+        override fun onDisplayRemoved(displayId: Int) {
+            android.util.Log.d("MainViewModel", "Display removed: $displayId")
+            loadAvailableDisplays()
+            handleDisplayDisconnected(displayId)
+        }
+
+        override fun onDisplayChanged(displayId: Int) {
+            android.util.Log.d("MainViewModel", "Display changed: $displayId")
+            loadAvailableDisplays()
+        }
+    }
 
     init {
         val database = RotationDatabase.getInstance(context)
@@ -73,6 +111,92 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         loadInstalledApps()
         loadAvailableDisplays()
         checkPermissions()
+
+        // Register display listener for hot-swap detection
+        displayManager.registerDisplayListener(displayListener, null)
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        // Unregister display listener
+        displayManager.unregisterDisplayListener(displayListener)
+    }
+
+    private fun handleDisplayDisconnected(displayId: Int) {
+        viewModelScope.launch {
+            // Clear selected screen if the disconnected display was selected
+            if (_selectedGlobalScreen.value.id == displayId) {
+                _selectedGlobalScreen.value = TargetScreen.AllScreens
+            }
+
+            // Update app screen selections
+            _selectedAppScreens.update { current ->
+                current.filterValues { it.id != displayId }
+            }
+
+            // Optionally: clean up orphaned settings for this display
+            // Note: We keep them by default for when the display reconnects
+            // Uncomment to auto-delete orphaned settings:
+            // repository.deleteSettingsForDisplay(displayId)
+        }
+    }
+
+    /**
+     * Clean up all orphaned settings for displays that no longer exist
+     */
+    fun cleanupOrphanedSettings() {
+        viewModelScope.launch {
+            try {
+                val currentDisplayIds = displayManager.displays.map { it.displayId }.toSet()
+                val allSettings = repository.getAllSettings().firstOrNull() ?: return@launch
+
+                allSettings.forEach { setting ->
+                    val displayId = setting.targetScreen.id
+                    // Skip "All Screens" setting (id = -1) and settings for existing displays
+                    if (displayId != -1 && !currentDisplayIds.contains(displayId)) {
+                        android.util.Log.d(
+                            "MainViewModel",
+                            "Cleaning up orphaned setting for ${setting.packageName} on display $displayId"
+                        )
+                        repository.deleteSettingForDisplay(setting.packageName, displayId)
+                    }
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("MainViewModel", "Failed to cleanup orphaned settings", e)
+            }
+        }
+    }
+
+    /**
+     * Get effective orientation for an app using smart fallback
+     */
+    suspend fun getEffectiveOrientationForApp(packageName: String, displayId: Int): ScreenOrientation? {
+        try {
+            val display = displayManager.displays.find { it.displayId == displayId }
+                ?: return null
+
+            val metrics = android.util.DisplayMetrics()
+            display.getMetrics(metrics)
+            val aspectRatio = when {
+                metrics.heightPixels > metrics.widthPixels -> AspectRatio.PORTRAIT
+                metrics.widthPixels.toFloat() / metrics.heightPixels.toFloat() < 1.3f -> AspectRatio.SQUARE
+                else -> AspectRatio.LANDSCAPE
+            }
+
+            val availableDisplayIds = displayManager.displays.map { it.displayId }.toSet()
+
+            val setting = repository.getEffectiveOrientation(
+                packageName = packageName,
+                currentDisplayId = displayId,
+                currentAspectRatio = aspectRatio,
+                availableDisplayIds = availableDisplayIds
+            )
+
+            return setting?.orientation
+        } catch (e: Exception) {
+            android.util.Log.e("MainViewModel", "Failed to get effective orientation", e)
+            return null
+        }
     }
 
     private fun observeState() {
@@ -85,13 +209,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 _state.update { currentState ->
                     currentState
                         .withGlobalOrientation(globalOrientation)
-                        .copy(perAppSettings = settings.associateBy { it.packageName })
+                        .copy(perAppSettings = settings.groupBy { it.packageName })
                 }
 
                 // Load saved screen selections for apps
-                val screenSelections = settings.associate {
-                    it.packageName to it.targetScreen
-                }
+                // For each app, select the most recently modified screen setting (use first as fallback)
+                val screenSelections = settings
+                    .groupBy { it.packageName }
+                    .mapValues { (_, settingsForApp) ->
+                        settingsForApp.firstOrNull()?.targetScreen ?: TargetScreen.AllScreens
+                    }
                 _selectedAppScreens.value = screenSelections
             }
         }
@@ -229,40 +356,47 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 // Comparative aspect ratio assignment
                 val screens = mutableListOf<TargetScreen>(TargetScreen.AllScreens)
 
-                if (displayInfos.size == 1) {
-                    // Single display: use absolute thresholds
-                    val info = displayInfos[0]
-                    val aspectRatio = when {
-                        info.height > info.width -> AspectRatio.PORTRAIT
-                        info.ratio < 1.2 -> AspectRatio.SQUARE  // Close to 1:1
-                        else -> AspectRatio.LANDSCAPE
+                when {
+                    displayInfos.isEmpty() -> {
+                        // No displays found - just use AllScreens
+                        android.util.Log.w("MainViewModel", "No displays found, using AllScreens only")
                     }
-                    screens.add(TargetScreen.SpecificScreen(info.displayId, info.name, aspectRatio))
-                } else {
-                    // Multiple displays: comparative approach
-                    val sortedByRatio = displayInfos.sortedBy { it.ratio }
-                    val minRatio = sortedByRatio.first().ratio
-                    val maxRatio = sortedByRatio.last().ratio
-                    val ratioRange = maxRatio - minRatio
-
-                    displayInfos.forEach { info ->
+                    displayInfos.size == 1 -> {
+                        // Single display: use absolute thresholds
+                        val info = displayInfos[0]
                         val aspectRatio = when {
-                            // Portrait if height > width
                             info.height > info.width -> AspectRatio.PORTRAIT
-                            // If there's meaningful difference between screens
-                            ratioRange > 0.15 -> {
-                                // Comparative: where does this screen fall?
-                                val positionInRange = (info.ratio - minRatio) / ratioRange
-                                when {
-                                    positionInRange > 0.6 -> AspectRatio.LANDSCAPE  // Wider end
-                                    positionInRange < 0.4 -> AspectRatio.SQUARE     // More square end
-                                    else -> AspectRatio.LANDSCAPE  // Middle defaults to landscape
-                                }
-                            }
-                            // All screens very similar - use absolute threshold
-                            else -> if (info.ratio < 1.3) AspectRatio.SQUARE else AspectRatio.LANDSCAPE
+                            info.ratio < 1.2 -> AspectRatio.SQUARE  // Close to 1:1
+                            else -> AspectRatio.LANDSCAPE
                         }
                         screens.add(TargetScreen.SpecificScreen(info.displayId, info.name, aspectRatio))
+                    }
+                    else -> {
+                        // Multiple displays: comparative approach
+                        val sortedByRatio = displayInfos.sortedBy { it.ratio }
+                        val minRatio = sortedByRatio.first().ratio
+                        val maxRatio = sortedByRatio.last().ratio
+                        val ratioRange = maxRatio - minRatio
+
+                        displayInfos.forEach { info ->
+                            val aspectRatio = when {
+                                // Portrait if height > width
+                                info.height > info.width -> AspectRatio.PORTRAIT
+                                // If there's meaningful difference between screens
+                                ratioRange > 0.15 -> {
+                                    // Comparative: where does this screen fall?
+                                    val positionInRange = (info.ratio - minRatio) / ratioRange
+                                    when {
+                                        positionInRange > 0.6 -> AspectRatio.LANDSCAPE  // Wider end
+                                        positionInRange < 0.4 -> AspectRatio.SQUARE     // More square end
+                                        else -> AspectRatio.LANDSCAPE  // Middle defaults to landscape
+                                    }
+                                }
+                                // All screens very similar - use absolute threshold
+                                else -> if (info.ratio < 1.3) AspectRatio.SQUARE else AspectRatio.LANDSCAPE
+                            }
+                            screens.add(TargetScreen.SpecificScreen(info.displayId, info.name, aspectRatio))
+                        }
                     }
                 }
 
@@ -304,7 +438,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun setAppTargetScreen(packageName: String, screen: TargetScreen) {
-        _selectedAppScreens.update { it + (packageName to screen) }
+        try {
+            android.util.Log.d("MainViewModel", "setAppTargetScreen: $packageName -> ${screen.displayName} (id=${screen.id})")
+            _selectedAppScreens.update { it + (packageName to screen) }
+            android.util.Log.d("MainViewModel", "Screen selection updated successfully")
+        } catch (e: Exception) {
+            android.util.Log.e("MainViewModel", "Error setting app target screen for $packageName", e)
+        }
     }
 
     fun setAppOrientation(
@@ -313,16 +453,27 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         orientation: ScreenOrientation
     ) {
         viewModelScope.launch {
-            val targetScreen = getSelectedScreenForApp(packageName)
-            val setting = AppOrientationSetting.create(
-                packageName = packageName,
-                appName = appName,
-                orientation = orientation,
-                targetScreen = targetScreen
-            )
-            repository.saveSetting(setting)
-            // Refresh app list to show updated visual state
-            loadInstalledApps()
+            try {
+                val targetScreen = getSelectedScreenForApp(packageName)
+                android.util.Log.d("MainViewModel", "setAppOrientation: $packageName -> ${orientation.displayName} on screen ${targetScreen.displayName} (id=${targetScreen.id})")
+
+                val setting = AppOrientationSetting.create(
+                    packageName = packageName,
+                    appName = appName,
+                    orientation = orientation,
+                    targetScreen = targetScreen
+                )
+                repository.saveSetting(setting)
+
+                // Apply the orientation immediately
+                applyOrientation(orientation, targetScreen)
+                android.util.Log.d("MainViewModel", "Applied orientation immediately")
+
+                // Refresh app list to show updated visual state
+                loadInstalledApps()
+            } catch (e: Exception) {
+                android.util.Log.e("MainViewModel", "Error setting app orientation for $packageName", e)
+            }
         }
     }
 
@@ -334,15 +485,115 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun removeAppSettingForScreen(packageName: String, displayId: Int) {
+        viewModelScope.launch {
+            repository.deleteSettingForDisplay(packageName, displayId)
+            // Refresh app list to update visual indicators
+            loadInstalledApps()
+        }
+    }
+
     fun toggleAppSettingEnabled(packageName: String) {
         viewModelScope.launch {
-            val currentSetting = state.value.perAppSettings[packageName] ?: return@launch
-            repository.saveSetting(currentSetting.toggleEnabled())
+            val currentSettings = state.value.perAppSettings[packageName] ?: return@launch
+            // Toggle all settings for this app
+            val toggledSettings = currentSettings.map { it.toggleEnabled() }
+            repository.saveSettings(toggledSettings)
         }
     }
 
     fun updateSearchQuery(query: String) {
         _searchQuery.value = query
+    }
+
+    fun setAppFilter(filter: String?) {
+        _appFilter.value = filter
+    }
+
+    fun clearAppFilter() {
+        _appFilter.value = null
+    }
+
+    /**
+     * Get currently running/open apps using UsageStatsManager
+     * FP: Pure function that returns immutable set
+     */
+    private fun getRunningApps(): Set<String> {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP_MR1) {
+            return emptySet()
+        }
+
+        return try {
+            val usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE)
+                as? android.app.usage.UsageStatsManager
+                ?: return emptySet()
+
+            val endTime = System.currentTimeMillis()
+            val startTime = endTime - 1000 * 60 * 5 // Last 5 minutes
+
+            // Use UsageEvents to get recently active apps
+            val usageEvents = usageStatsManager.queryEvents(startTime, endTime)
+            val runningApps = mutableSetOf<String>()
+
+            while (usageEvents.hasNextEvent()) {
+                val event = android.app.usage.UsageEvents.Event()
+                usageEvents.getNextEvent(event)
+
+                // Track apps that were recently in foreground
+                if (event.eventType == android.app.usage.UsageEvents.Event.ACTIVITY_RESUMED ||
+                    event.eventType == android.app.usage.UsageEvents.Event.MOVE_TO_FOREGROUND) {
+                    runningApps.add(event.packageName)
+                }
+            }
+
+            runningApps.toSet() // Return immutable set
+        } catch (e: Exception) {
+            android.util.Log.e("MainViewModel", "Error getting running apps", e)
+            emptySet()
+        }
+    }
+
+    /**
+     * Get the current foreground app package name
+     * Returns null if no app is detected or permission is missing
+     */
+    fun getCurrentForegroundApp(): String? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP_MR1) {
+            return null
+        }
+
+        return try {
+            val usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE)
+                as? android.app.usage.UsageStatsManager
+                ?: return null
+
+            val endTime = System.currentTimeMillis()
+            val startTime = endTime - 1000 * 60 * 10 // Last 10 minutes
+
+            val usageEvents = usageStatsManager.queryEvents(startTime, endTime)
+            var mostRecentPackage: String? = null
+            var mostRecentTimestamp = 0L
+
+            while (usageEvents.hasNextEvent()) {
+                val event = android.app.usage.UsageEvents.Event()
+                usageEvents.getNextEvent(event)
+
+                // Track most recent foreground event
+                if (event.eventType == android.app.usage.UsageEvents.Event.ACTIVITY_RESUMED ||
+                    event.eventType == android.app.usage.UsageEvents.Event.MOVE_TO_FOREGROUND) {
+                    if (event.timeStamp > mostRecentTimestamp) {
+                        mostRecentTimestamp = event.timeStamp
+                        mostRecentPackage = event.packageName
+                    }
+                }
+            }
+
+            // Don't return our own package
+            if (mostRecentPackage == context.packageName) null else mostRecentPackage
+        } catch (e: Exception) {
+            android.util.Log.e("MainViewModel", "Error getting current foreground app", e)
+            null
+        }
     }
 
     fun requestDrawOverlayPermission() {
@@ -401,10 +652,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun flashScreen(targetScreen: TargetScreen) {
         try {
             val currentPalette = app.rotatescreen.ui.components.RiscOsColors.currentPalette
+
+            // Get display information if specific screen
+            var displayInfo = ""
+            if (targetScreen is TargetScreen.SpecificScreen) {
+                val display = displayManager.displays.find { it.displayId == targetScreen.id }
+                if (display != null) {
+                    val metrics = android.util.DisplayMetrics()
+                    display.getMetrics(metrics)
+                    displayInfo = "${metrics.widthPixels}×${metrics.heightPixels} • ${metrics.densityDpi}dpi"
+                }
+            }
+
             val intent = Intent(context, OrientationControlService::class.java).apply {
                 action = "com.aware.rotation.action.FLASH_SCREEN"
                 putExtra(OrientationControlService.EXTRA_SCREEN_ID, targetScreen.id)
                 putExtra("SCREEN_NAME", targetScreen.displayName)
+                putExtra("DISPLAY_INFO", displayInfo)
+                putExtra("ASPECT_RATIO", targetScreen.aspectRatio.name)
                 putExtra("PALETTE_NAME", currentPalette.name)
                 putExtra("COLOR_1", currentPalette.actionBlue.value.toLong())
                 putExtra("COLOR_2", currentPalette.actionGreen.value.toLong())
@@ -416,9 +681,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     is TargetScreen.AllScreens -> _state.value.globalOrientation
                     is TargetScreen.SpecificScreen -> {
                         // Check for per-app setting first, otherwise global
-                        _state.value.perAppSettings.values.firstOrNull {
-                            it.targetScreen.id == targetScreen.id
-                        }?.orientation ?: _state.value.globalOrientation
+                        _state.value.perAppSettings.values
+                            .flatten()
+                            .firstOrNull { it.targetScreen.id == targetScreen.id }
+                            ?.orientation ?: _state.value.globalOrientation
                     }
                 }
                 putExtra("ORIENTATION", orientation.displayName)
