@@ -94,7 +94,7 @@ class RiscOsPaletteTest {
     fun `All palettes list contains the built-in palettes`() {
         val all = RiscOsPalette.All
 
-        assertEquals(8, all.size)
+        assertEquals(9, all.size)
         assertTrue(all.contains(RiscOsPalette.Classic))
         assertTrue(all.contains(RiscOsPalette.Aqua))
         assertTrue(all.contains(RiscOsPalette.Sand))
@@ -246,6 +246,58 @@ class RiscOsPaletteTest {
 
         RiscOsColors.setPalette(RiscOsPalette.Aqua)
         assertEquals(RiscOsPalette.Aqua, RiscOsColors.currentPalette)
+    }
+
+    @Test
+    fun `E-Ink palette stays legible on e-ink hardware`() {
+        // E-ink renders colour as luminance over ~16 grey levels, so hue
+        // carries nothing. Every foreground must clear WCAG AA (4.5:1) against
+        // the background on luminance alone, or it vanishes on the device.
+        val p = RiscOsPalette.EInk
+        val foregrounds = mapOf(
+            "black" to p.black,
+            "veryDarkGray" to p.veryDarkGray,
+            "darkGray" to p.darkGray,
+            "actionBlue" to p.actionBlue,
+            "actionGreen" to p.actionGreen,
+            "actionRed" to p.actionRed,
+            "actionYellow" to p.actionYellow
+        )
+        foregrounds.forEach { (name, colour) ->
+            val ratio = contrastRatio(colour, p.background)
+            assertTrue(
+                "$name is $ratio:1 against the E-Ink background, below the 4.5:1 minimum",
+                ratio >= 4.5
+            )
+        }
+    }
+
+    @Test
+    fun `E-Ink palette does not encode meaning in shade`() {
+        // Keeping four action shades apart *and* above 4.5:1 on white is not
+        // possible, so they are all near-black on purpose and meaning is left
+        // to glyphs and labels. This pins that decision.
+        val p = RiscOsPalette.EInk
+        listOf(p.actionBlue, p.actionGreen, p.actionRed, p.actionYellow).forEach {
+            assertTrue(
+                "action colours must stay near-black so none of them reads as a hue",
+                relativeLuminance(it) < 0.15
+            )
+        }
+    }
+
+    private fun relativeLuminance(c: Color): Double {
+        fun channel(v: Float): Double {
+            val d = v.toDouble()
+            return if (d <= 0.03928) d / 12.92 else Math.pow((d + 0.055) / 1.055, 2.4)
+        }
+        return 0.2126 * channel(c.red) + 0.7152 * channel(c.green) + 0.0722 * channel(c.blue)
+    }
+
+    private fun contrastRatio(a: Color, b: Color): Double {
+        val la = relativeLuminance(a)
+        val lb = relativeLuminance(b)
+        return (maxOf(la, lb) + 0.05) / (minOf(la, lb) + 0.05)
     }
 
     @Test

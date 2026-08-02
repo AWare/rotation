@@ -172,6 +172,42 @@ fun MainScreen(
         }
 
         // Logs button
+        // Appearance
+        RiscOsWindow(
+            title = "Appearance",
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                RiscOsLabel(
+                    text = "Theme: ${RiscOsColors.currentPalette.name}",
+                    fontWeight = FontWeight.Bold
+                )
+                RiscOsLabel(
+                    text = "E-Ink is high-contrast monochrome for e-readers.",
+                    maxLines = 2
+                )
+                // Previously the only way to change theme was a gamepad's
+                // shoulder buttons, which e-readers do not have.
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    RiscOsButton(
+                        onClick = { viewModel.cyclePaletteBack() },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        RiscOsLabel(text = "◀ Prev", fontWeight = FontWeight.Bold)
+                    }
+                    RiscOsButton(
+                        onClick = { viewModel.cyclePalette() },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        RiscOsLabel(text = "Next ▶", fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+
         RiscOsWindow(
             title = "Diagnostics",
             modifier = Modifier.fillMaxWidth()

@@ -52,6 +52,8 @@ class MainActivity : ComponentActivity() {
         // Get target screen from intent
         val targetScreen = intent?.getStringExtra(EXTRA_SCREEN)
 
+        viewModel.observePalette()
+
         setContent {
             RotationTheme {
                 Surface(
@@ -78,12 +80,12 @@ class MainActivity : ComponentActivity() {
         return when (keyCode) {
             KeyEvent.KEYCODE_BUTTON_R1 -> {
                 // R1 button - next palette
-                RiscOsColors.nextPalette()
+                viewModel.cyclePalette()
                 true
             }
             KeyEvent.KEYCODE_BUTTON_L1 -> {
                 // L1 button - previous palette
-                RiscOsColors.previousPalette()
+                viewModel.cyclePaletteBack()
                 true
             }
             else -> super.onKeyDown(keyCode, event)
