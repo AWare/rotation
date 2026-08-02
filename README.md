@@ -159,7 +159,18 @@ whose signing certificate differs from the installed app's, so a key that
 changes between builds means every update fails until the user uninstalls.
 
 Generate a keystore once and keep it safe — losing it means no existing install
-can ever be updated:
+can ever be updated.
+
+If you use 1Password, `tools/setup-release-signing.sh` does the whole thing:
+generates the password in 1Password, creates the keystore, stores the keystore
+file in 1Password as a backup, and loads all four GitHub Actions secrets. The
+password is never printed and never passed as a command-line argument.
+
+```bash
+./tools/setup-release-signing.sh
+```
+
+Otherwise, by hand:
 
 ```bash
 keytool -genkeypair -v -keystore release.jks -alias rotation \
