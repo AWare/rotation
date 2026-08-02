@@ -4,7 +4,6 @@ import android.accessibilityservice.AccessibilityServiceInfo
 import android.app.AppOpsManager
 import android.content.ComponentName
 import android.content.Context
-import android.os.Build
 import android.os.Process
 import android.provider.Settings
 import android.service.quicksettings.TileService
@@ -40,22 +39,14 @@ object ComprehensivePermissionChecker {
      * Check if WRITE_SETTINGS permission is granted
      */
     fun hasWriteSettingsPermission(context: Context): Boolean {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            Settings.System.canWrite(context)
-        } else {
-            true // Not required on older versions
-        }
+        return Settings.System.canWrite(context)
     }
 
     /**
      * Check if SYSTEM_ALERT_WINDOW (overlay) permission is granted
      */
     fun hasOverlayPermission(context: Context): Boolean {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            Settings.canDrawOverlays(context)
-        } else {
-            true // Not required on older versions
-        }
+        return Settings.canDrawOverlays(context)
     }
 
     /**
@@ -64,20 +55,11 @@ object ComprehensivePermissionChecker {
     fun hasUsageStatsPermission(context: Context): Boolean {
         return try {
             val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as? AppOpsManager
-            val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                appOps?.unsafeCheckOpNoThrow(
-                    AppOpsManager.OPSTR_GET_USAGE_STATS,
-                    Process.myUid(),
-                    context.packageName
-                )
-            } else {
-                @Suppress("DEPRECATION")
-                appOps?.checkOpNoThrow(
-                    AppOpsManager.OPSTR_GET_USAGE_STATS,
-                    Process.myUid(),
-                    context.packageName
-                )
-            }
+            val mode = appOps?.unsafeCheckOpNoThrow(
+                AppOpsManager.OPSTR_GET_USAGE_STATS,
+                Process.myUid(),
+                context.packageName
+            )
             mode == AppOpsManager.MODE_ALLOWED
         } catch (e: Exception) {
             false
@@ -172,16 +154,11 @@ object ComprehensivePermissionChecker {
      * We'll show tiles as "optional" and let users verify manually.
      */
     fun checkTileStatus(context: Context): TileStatus {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            TileStatus(
-                orientationTileAdded = isTileAdded(context, OrientationTileService::class.java),
-                globalOrientationTileAdded = isTileAdded(context, GlobalOrientationTileService::class.java),
-                currentAppTileAdded = isTileAdded(context, CurrentAppTileService::class.java)
-            )
-        } else {
-            // Quick Settings tiles not available on older versions
-            TileStatus.ALL // Assume OK on older versions
-        }
+        return TileStatus(
+            orientationTileAdded = isTileAdded(context, OrientationTileService::class.java),
+            globalOrientationTileAdded = isTileAdded(context, GlobalOrientationTileService::class.java),
+            currentAppTileAdded = isTileAdded(context, CurrentAppTileService::class.java)
+        )
     }
 
     /**
@@ -192,18 +169,14 @@ object ComprehensivePermissionChecker {
      */
     private fun isTileAdded(context: Context, tileServiceClass: Class<out TileService>): Boolean {
         return try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                val componentName = ComponentName(context, tileServiceClass)
+            val componentName = ComponentName(context, tileServiceClass)
 
-                // Request listening state - this will succeed if tile was ever added
-                TileService.requestListeningState(context, componentName)
+            // Request listening state - this will succeed if tile was ever added
+            TileService.requestListeningState(context, componentName)
 
-                // If no exception, tile is likely added (or was added at some point)
-                // We can't definitively tell if user removed it, so we return true
-                true
-            } else {
-                true // Not applicable on older versions
-            }
+            // If no exception, tile is likely added (or was added at some point)
+            // We can't definitively tell if user removed it, so we return true
+            true
         } catch (e: Exception) {
             // Exception likely means tile was never added
             false
