@@ -95,7 +95,22 @@ class CurrentAppTileService : TileService() {
                 putExtra(MainActivity.EXTRA_SCREEN, "multi_screen_manager")
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
             }
-            startActivityAndCollapse(intent)
+            // startActivityAndCollapse(Intent) throws UnsupportedOperationException
+            // on API 34+; the PendingIntent overload only exists from API 34.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                startActivityAndCollapse(
+                    PendingIntent.getActivity(
+                        this,
+                        "multi_screen_manager".hashCode(),
+                        intent,
+                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                    )
+                )
+            } else {
+                // Deprecated, but it is the only overload that exists below API 34.
+                @Suppress("DEPRECATION", "StartActivityAndCollapseDeprecated")
+                startActivityAndCollapse(intent)
+            }
             android.util.Log.d("CurrentAppTileService", "Opened Multi-Screen Manager")
         } catch (e: Exception) {
             android.util.Log.e("CurrentAppTileService", "Failed to open Multi-Screen Manager", e)
@@ -350,8 +365,8 @@ class CurrentAppTileService : TileService() {
             label = "$appName: ${orientation.displayName}"
             contentDescription = "Current app: $appName, Orientation: ${orientation.displayName}. Long press to configure."
 
-            // For Android 13+, set a PendingIntent to open Multi-Screen Manager
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            // setActivityLaunchForClick was added in API 34, not 33.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
                 val intent = Intent(this@CurrentAppTileService, MainActivity::class.java).apply {
                     putExtra(MainActivity.EXTRA_SCREEN, "multi_screen_manager")
                     flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP

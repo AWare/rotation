@@ -134,34 +134,56 @@ Or download from [GitHub Releases](../../releases)
 
 ### GitHub Actions
 
-**Build & Test** (on push/PR):
-- Runs all unit tests
-- Builds debug APK
-- Runs lint checks
-- Uploads artifacts
+**Build & Test** (on push to `main`/`claude/**` and on PRs):
+- Runs unit tests, lint and a debug APK build
+- Any of those failing fails the job
+- Uploads test/lint reports and the debug APK
 
-**Release** (on tag push):
-- Runs full test suite
-- Builds release APK
-- Creates GitHub release
-- Uploads signed APK (if keystore configured)
+**Release** (on push to `main`, or manually via *Run workflow*):
+- Runs the unit tests
+- Builds a release APK signed with the release keystore
+- Refuses to publish a debug-signed APK
+- Creates a GitHub release tagged `v<versionName>`
 
-### Creating a Release
+### Versioning
+
+`versionCode` and `versionName` come from `BUILD_NUMBER`, which CI sets to
+`github.run_number`. Every release therefore gets a higher `versionCode` than
+the last, which is what Android and Obtainium require to offer an update. Local
+builds default to `BUILD_NUMBER=0` (version `1.0.0`, code `1`).
+
+### Signing (required for releases)
+
+Releases must be signed with a stable key. Android refuses to install an update
+whose signing certificate differs from the installed app's, so a key that
+changes between builds means every update fails until the user uninstalls.
+
+Generate a keystore once and keep it safe — losing it means no existing install
+can ever be updated:
 
 ```bash
-git tag v1.0.0
-git push origin v1.0.0
+keytool -genkeypair -v -keystore release.jks -alias rotation \
+  -keyalg RSA -keysize 2048 -validity 10000
+base64 -w0 release.jks   # value for the KEYSTORE_BASE64 secret
 ```
 
-GitHub Actions will automatically build and create a release.
+Add these repository secrets:
+- `KEYSTORE_BASE64`: base64-encoded keystore file
+- `KEYSTORE_PASSWORD`: keystore password
+- `KEY_ALIAS`: key alias
+- `KEY_PASSWORD`: key password
 
-### Signing (Optional)
+For a local release build, either create `keystore.properties` in the repo root:
 
-Add these secrets to your GitHub repository:
-- `KEYSTORE_BASE64`: Base64-encoded keystore file
-- `KEY_ALIAS`: Keystore alias
-- `KEY_PASSWORD`: Key password
-- `KEYSTORE_PASSWORD`: Keystore password
+```properties
+storeFile=release.jks
+storePassword=...
+keyAlias=rotation
+keyPassword=...
+```
+
+…or pass `-PallowDebugSignedRelease=true` for a throwaway debug-signed APK.
+Never use that flag for anything you intend to distribute.
 
 ## Development
 
@@ -199,11 +221,41 @@ data class AppOrientationEntity(
 ## Building
 
 ```bash
-./gradlew assembleDebug      # Debug build
-./gradlew assembleRelease    # Release build
-./gradlew test              # Run tests
-./gradlew lint              # Run lint
+./gradlew assembleDebug        # Debug build
+./gradlew assembleRelease      # Release build (needs signing config, see above)
+./gradlew testDebugUnitTest    # Run unit tests
+./gradlew lintDebug            # Run lint
+./gradlew -q printVersion      # Show the version this build would produce
 ```
+
+### Local toolchain
+
+The build needs JDK 17 and the Android SDK (platform 34, build-tools 34.0.0).
+Neither has to come from Android Studio; a headless setup is enough to run
+everything CI runs:
+
+```bash
+# JDK 17
+mkdir -p ~/.jdks/temurin-17
+curl -fSL "https://api.adoptium.net/v3/binary/latest/17/ga/linux/x64/jdk/hotspot/normal/eclipse" \
+  | tar -xz -C ~/.jdks/temurin-17 --strip-components=1
+
+# Android SDK command-line tools
+mkdir -p ~/Android/Sdk/cmdline-tools
+curl -fSLo /tmp/cmdline-tools.zip \
+  "https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip"
+unzip -q /tmp/cmdline-tools.zip -d ~/Android/Sdk/cmdline-tools
+mv ~/Android/Sdk/cmdline-tools/cmdline-tools ~/Android/Sdk/cmdline-tools/latest
+
+export JAVA_HOME="$HOME/.jdks/temurin-17"
+export ANDROID_HOME="$HOME/Android/Sdk"
+export PATH="$JAVA_HOME/bin:$ANDROID_HOME/cmdline-tools/latest/bin:$PATH"
+
+yes | sdkmanager --licenses
+sdkmanager --install "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+```
+
+Gradle finds the SDK through `ANDROID_HOME`, so no `local.properties` is needed.
 
 ## Requirements
 

@@ -8,6 +8,35 @@ plugins {
     id("com.google.devtools.ksp")
 }
 
+// Release signing material. Environment variables win over keystore.properties
+// so CI can inject secrets without writing a file to the workspace.
+val keystoreProperties = Properties().apply {
+    val file = rootProject.file("keystore.properties")
+    if (file.exists()) FileInputStream(file).use { load(it) }
+}
+
+fun signingSetting(envName: String, propertyName: String): String? =
+    System.getenv(envName) ?: keystoreProperties.getProperty(propertyName)
+
+val releaseStoreFile = signingSetting("KEYSTORE_FILE", "storeFile")
+val releaseStorePassword = signingSetting("KEYSTORE_PASSWORD", "storePassword")
+val releaseKeyAlias = signingSetting("KEY_ALIAS", "keyAlias")
+val releaseKeyPassword = signingSetting("KEY_PASSWORD", "keyPassword")
+val hasReleaseSigning = releaseStoreFile != null && releaseStorePassword != null &&
+    releaseKeyAlias != null && releaseKeyPassword != null
+
+// Escape hatch for local release smoke-testing only. Never set this in CI: a
+// debug keystore is generated per machine, so every build would sign with a
+// different certificate and Android would reject the update.
+val allowDebugSignedRelease = providers.gradleProperty("allowDebugSignedRelease")
+    .map { it.toBoolean() }.getOrElse(false)
+
+// versionCode must increase for every published APK or Android and Obtainium
+// refuse to install the update. CI passes BUILD_NUMBER=${{ github.run_number }},
+// which is monotonic and, unlike a git commit count, survives shallow clones.
+val buildNumber = (System.getenv("BUILD_NUMBER") ?: "0").toIntOrNull() ?: 0
+val baseVersionName = "1.0"
+
 android {
     namespace = "app.rotatescreen"
     compileSdk = 34
@@ -16,8 +45,8 @@ android {
         applicationId = "app.rotatescreen"
         minSdk = 29
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = buildNumber.coerceAtLeast(1)
+        versionName = "$baseVersionName.$buildNumber"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -27,22 +56,21 @@ android {
 
     signingConfigs {
         create("release") {
-            // Use release keystore if available, otherwise fall back to debug
-            val keystorePropertiesFile = rootProject.file("keystore.properties")
-            if (keystorePropertiesFile.exists()) {
-                val keystoreProperties = Properties()
-                keystoreProperties.load(FileInputStream(keystorePropertiesFile))
-
-                storeFile = file(keystoreProperties.getProperty("storeFile") ?: "debug.keystore")
-                storePassword = keystoreProperties.getProperty("storePassword") ?: "android"
-                keyAlias = keystoreProperties.getProperty("keyAlias") ?: "androiddebugkey"
-                keyPassword = keystoreProperties.getProperty("keyPassword") ?: "android"
-            } else {
-                // Fall back to debug signing for local builds and CI without secrets
-                storeFile = file("${System.getProperty("user.home")}/.android/debug.keystore")
-                storePassword = "android"
-                keyAlias = "androiddebugkey"
-                keyPassword = "android"
+            when {
+                hasReleaseSigning -> {
+                    storeFile = rootProject.file(releaseStoreFile!!)
+                    storePassword = releaseStorePassword
+                    keyAlias = releaseKeyAlias
+                    keyPassword = releaseKeyPassword
+                }
+                allowDebugSignedRelease -> {
+                    storeFile = file("${System.getProperty("user.home")}/.android/debug.keystore")
+                    storePassword = "android"
+                    keyAlias = "androiddebugkey"
+                    keyPassword = "android"
+                }
+                // Otherwise leave unconfigured; packageRelease fails below with
+                // an actionable message instead of emitting a debug-signed APK.
             }
         }
     }
@@ -97,6 +125,39 @@ android {
     }
 }
 
+// Fail the release build rather than shipping an APK signed with a throwaway
+// debug key. The debug keystore is generated per machine, so a debug-signed
+// release gets a new certificate on every runner and Android rejects the
+// update with a signature mismatch.
+tasks.matching { it.name == "packageRelease" }.configureEach {
+    doFirst {
+        check(hasReleaseSigning || allowDebugSignedRelease) {
+            """
+            Release signing is not configured.
+
+            CI:    set the KEYSTORE_FILE, KEYSTORE_PASSWORD, KEY_ALIAS and
+                   KEY_PASSWORD environment variables from repository secrets.
+            Local: create keystore.properties (storeFile/storePassword/keyAlias/
+                   keyPassword), or pass -PallowDebugSignedRelease=true to build
+                   a throwaway debug-signed APK for testing.
+
+            See README.md > Signing.
+            """.trimIndent()
+        }
+    }
+}
+
+// Lets the release workflow read the version from Gradle itself rather than
+// grepping this file, which previously also matched versionNameSuffix.
+tasks.register("printVersion") {
+    val name = android.defaultConfig.versionName
+    val code = android.defaultConfig.versionCode
+    doLast {
+        println("versionName=$name")
+        println("versionCode=$code")
+    }
+}
+
 dependencies {
     // AndroidX Core
     implementation("androidx.core:core-ktx:1.12.0")
@@ -136,9 +197,14 @@ dependencies {
 
     // Testing
     testImplementation("junit:junit:4.13.2")
+    // The test sources import kotlin.test.* assertions; without this they do
+    // not compile at all.
+    testImplementation(kotlin("test"))
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
     testImplementation("io.mockk:mockk:1.13.8")
-    testImplementation("io.mockk:mockk-android:1.13.8")
+    // mockk-android belongs on the instrumented-test classpath only; on the
+    // JVM unit-test classpath it shadows the JVM agent with the Android one.
+    androidTestImplementation("io.mockk:mockk-android:1.13.8")
     testImplementation("app.cash.turbine:turbine:1.0.0")
     testImplementation("androidx.arch.core:core-testing:2.2.0")
     testImplementation("com.google.truth:truth:1.1.5")

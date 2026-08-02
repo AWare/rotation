@@ -37,7 +37,7 @@ class OrientationStateTest {
         val state = OrientationState().withPerAppSetting(setting)
 
         assertEquals(1, state.perAppSettings.size)
-        assertEquals(setting, state.perAppSettings["com.test"])
+        assertEquals(listOf(setting), state.perAppSettings["com.test"])
     }
 
     @Test
@@ -50,7 +50,11 @@ class OrientationStateTest {
             .withPerAppSetting(setting2)
 
         assertEquals(1, state.perAppSettings.size)
-        assertEquals(ScreenOrientation.Landscape, state.perAppSettings["com.test"]?.orientation)
+        // Both settings target the same screen, so the second replaces the first.
+        assertEquals(
+            ScreenOrientation.Landscape,
+            state.perAppSettings["com.test"]?.single()?.orientation
+        )
     }
 
     @Test
