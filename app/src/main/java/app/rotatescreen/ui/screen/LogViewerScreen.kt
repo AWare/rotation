@@ -11,14 +11,14 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.isActive
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
-import java.io.BufferedReader
-import java.io.InputStreamReader
+import kotlinx.coroutines.withContext
 
 data class LogEntry(
     val timestamp: String,
@@ -184,79 +184,53 @@ fun LogEntryItem(log: LogEntry) {
     }
 }
 
-private fun collectLogs(): List<LogEntry> {
-    val logs = mutableListOf<LogEntry>()
-    var process: Process? = null
-    var inputReader: BufferedReader? = null
-    var errorReader: BufferedReader? = null
-
-    try {
-        // Run logcat command filtered for rotation-related tags
-        process = Runtime.getRuntime().exec(
-            arrayOf(
-                "logcat",
-                "-d", // Dump and exit
-                "-v", "time", // Time format
-                "-t", "500", // Last 500 lines only
-                "OrientationControl:*",
-                "OrientationSelector:*",
-                "CurrentAppTileService:*",
-                "ForegroundAppDetector:*",
-                "MainViewModel:*",
-                "ScreenSelector:*",
-                "AppConfigScreen:*",
-                "*:S" // Silence everything else
-            )
-        )
-
-        // Read both stdout and stderr to prevent blocking
-        inputReader = BufferedReader(InputStreamReader(process.inputStream))
-        errorReader = BufferedReader(InputStreamReader(process.errorStream))
-
-        // Consume error stream in background to prevent blocking
-        Thread {
-            try {
-                errorReader.useLines { it.forEach { } }  // Discard error output
-            } catch (e: Exception) {
-                android.util.Log.e("LogViewerScreen", "Error reading error stream", e)
-            }
-        }.start()
-
-        // Read stdout
-        inputReader.useLines { lines ->
-            lines.forEach { line ->
-                parseLogLine(line)?.let { logs.add(it) }
-            }
-        }
-
-        // Wait for process to complete (with timeout)
-        if (!process.waitFor(2, java.util.concurrent.TimeUnit.SECONDS)) {
-            android.util.Log.w("LogViewerScreen", "Process timeout - forcibly destroying")
-            process.destroyForcibly()
-        }
+/**
+ * Reads this app's own logcat output.
+ *
+ * Runs on Dispatchers.IO: this spawns a process, blocks on stream reads and
+ * waits up to two seconds for it to exit, and was previously doing all of that
+ * on the main thread once per second.
+ *
+ * stderr is merged into stdout so there is a single stream to drain. The old
+ * version started a fresh Thread every second purely to discard stderr, and
+ * that thread raced the finally block that closed the reader under it.
+ */
+private suspend fun collectLogs(): List<LogEntry> = withContext(Dispatchers.IO) {
+    val process = try {
+        ProcessBuilder(
+            "logcat",
+            "-d", // Dump and exit
+            "-v", "time", // Time format
+            "-t", "500", // Last 500 lines only
+            "OrientationControl:*",
+            "OrientationSelector:*",
+            "CurrentAppTileService:*",
+            "ForegroundAppDetector:*",
+            "MainViewModel:*",
+            "ScreenSelector:*",
+            "AppConfigScreen:*",
+            "*:S" // Silence everything else
+        ).redirectErrorStream(true).start()
     } catch (e: Exception) {
-        android.util.Log.e("LogViewerScreen", "Error collecting logs", e)
-        // Don't add error entry to avoid cluttering the UI
-    } finally {
-        // Close all streams and destroy process
-        try {
-            inputReader?.close()
-        } catch (e: Exception) {
-            android.util.Log.e("LogViewerScreen", "Error closing input reader", e)
-        }
-        try {
-            errorReader?.close()
-        } catch (e: Exception) {
-            android.util.Log.e("LogViewerScreen", "Error closing error reader", e)
-        }
-        try {
-            process?.destroyForcibly()
-        } catch (e: Exception) {
-            android.util.Log.e("LogViewerScreen", "Error destroying process", e)
-        }
+        android.util.Log.e("LogViewerScreen", "Could not start logcat", e)
+        return@withContext emptyList()
     }
 
-    return logs
+    try {
+        // useLines closes the reader; anything logcat writes to stderr simply
+        // fails to parse and is dropped.
+        process.inputStream.bufferedReader().useLines { lines ->
+            lines.mapNotNull(::parseLogLine).toList()
+        }
+    } catch (e: Exception) {
+        android.util.Log.e("LogViewerScreen", "Error reading logcat output", e)
+        emptyList()
+    } finally {
+        if (!process.waitFor(2, java.util.concurrent.TimeUnit.SECONDS)) {
+            android.util.Log.w("LogViewerScreen", "logcat did not exit; destroying")
+        }
+        process.destroyForcibly()
+    }
 }
 
 private fun parseLogLine(line: String): LogEntry? {
