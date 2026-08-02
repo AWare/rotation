@@ -252,10 +252,8 @@ longer falls back to destroying user data.
 
 ### Local toolchain
 
-The build needs JDK 17 and the Android SDK. AGP downloads the exact
-compileSdk platform itself, so a recent platform and build-tools is enough.
-Neither has to come from Android Studio; a headless setup is enough to run
-everything CI runs:
+The build needs JDK 17 and the Android SDK. Neither has to come from Android
+Studio; a headless setup runs everything CI runs:
 
 ```bash
 # JDK 17
@@ -263,10 +261,12 @@ mkdir -p ~/.jdks/temurin-17
 curl -fSL "https://api.adoptium.net/v3/binary/latest/17/ga/linux/x64/jdk/hotspot/normal/eclipse" \
   | tar -xz -C ~/.jdks/temurin-17 --strip-components=1
 
-# Android SDK command-line tools
+# Android SDK command-line tools (rev 22). An older cmdline-tools cannot parse
+# the current SDK index -- it reports "only understands SDK XML versions up to
+# 3" and then fails to find any recent platform.
 mkdir -p ~/Android/Sdk/cmdline-tools
 curl -fSLo /tmp/cmdline-tools.zip \
-  "https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip"
+  "https://dl.google.com/android/repository/commandlinetools-linux-15859902_latest.zip"
 unzip -q /tmp/cmdline-tools.zip -d ~/Android/Sdk/cmdline-tools
 mv ~/Android/Sdk/cmdline-tools/cmdline-tools ~/Android/Sdk/cmdline-tools/latest
 
@@ -275,8 +275,17 @@ export ANDROID_HOME="$HOME/Android/Sdk"
 export PATH="$JAVA_HOME/bin:$ANDROID_HOME/cmdline-tools/latest/bin:$PATH"
 
 yes | sdkmanager --licenses
-sdkmanager --install "platform-tools" "platforms;android-36" "build-tools;36.0.0"
+sdkmanager --install "platform-tools" "platforms;android-37.0" "build-tools;37.0.0"
 ```
+
+Note the platform id is `android-37.0`, not `android-37` — recent SDK packages
+carry a minor version. To keep cmdline-tools current later, run
+`sdkmanager --install "cmdline-tools;latest"`; it installs alongside as
+`latest-2`, so move it over `latest` yourself.
+
+`sdkmanager` still works but is deprecated in favour of `android sdk`, which
+prompts to accept terms interactively and enables usage metrics unless you pass
+`--no-metrics`.
 
 Gradle finds the SDK through `ANDROID_HOME`, so no `local.properties` is needed.
 
