@@ -1,6 +1,7 @@
 package app.rotatescreen.ui
 
 import android.app.ActivityManager
+import androidx.core.net.toUri
 import android.app.Application
 import android.content.Context
 import android.content.Intent
@@ -21,6 +22,7 @@ import app.rotatescreen.domain.model.*
 import app.rotatescreen.service.OrientationControlService
 import app.rotatescreen.util.AccessibilityChecker
 import app.rotatescreen.util.PermissionChecker
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -28,16 +30,28 @@ import kotlinx.coroutines.launch
 /**
  * ViewModel for managing orientation state using FP style
  */
-class MainViewModel(application: Application) : AndroidViewModel(application) {
+class MainViewModel @JvmOverloads constructor(
+    application: Application,
+    // Injected so tests can pass a TestDispatcher. Work dispatched to the real
+    // Dispatchers.IO runs on a thread pool the test scheduler cannot wait for,
+    // which made every assertion about loaded apps a race.
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+) : AndroidViewModel(application) {
 
     private val context: Context get() = getApplication<Application>().applicationContext
     private val repository: OrientationRepository
     private val preferencesManager: PreferencesManager
-    private val displayManager: DisplayManager by lazy {
-        val service = context.getSystemService(Context.DISPLAY_SERVICE)
-        if (service is DisplayManager) service
-        else throw IllegalStateException("DisplayManager not available")
+    // Nullable rather than throwing from a lazy initialiser: that turned a
+    // missing system service into a crash at an arbitrary later point, with a
+    // stack trace pointing at whichever display access happened to be first.
+    // Matches how ForegroundAppDetectorService already resolves this service.
+    private val displayManager: DisplayManager? by lazy {
+        context.getSystemService(Context.DISPLAY_SERVICE) as? DisplayManager
     }
+
+    /** Empty when the display service is unavailable, which reads as "no screens". */
+    private val displays: Array<android.view.Display>
+        get() = displayManager?.displays ?: emptyArray()
 
     private val _state = MutableStateFlow(OrientationState())
     val state: StateFlow<OrientationState> = _state.asStateFlow()
@@ -113,13 +127,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         checkPermissions()
 
         // Register display listener for hot-swap detection
-        displayManager.registerDisplayListener(displayListener, null)
+        displayManager?.registerDisplayListener(displayListener, null)
     }
 
     override fun onCleared() {
-        super.onCleared()
         // Unregister display listener
-        displayManager.unregisterDisplayListener(displayListener)
+        displayManager?.unregisterDisplayListener(displayListener)
     }
 
     private fun handleDisplayDisconnected(displayId: Int) {
@@ -147,7 +160,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun cleanupOrphanedSettings() {
         viewModelScope.launch {
             try {
-                val currentDisplayIds = displayManager.displays.map { it.displayId }.toSet()
+                val currentDisplayIds = displays.map { it.displayId }.toSet()
                 val allSettings = repository.getAllSettings().firstOrNull() ?: return@launch
 
                 allSettings.forEach { setting ->
@@ -172,7 +185,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      */
     suspend fun getEffectiveOrientationForApp(packageName: String, displayId: Int): ScreenOrientation? {
         try {
-            val display = displayManager.displays.find { it.displayId == displayId }
+            val display = displays.find { it.displayId == displayId }
                 ?: return null
 
             val metrics = android.util.DisplayMetrics()
@@ -183,7 +196,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 else -> AspectRatio.LANDSCAPE
             }
 
-            val availableDisplayIds = displayManager.displays.map { it.displayId }.toSet()
+            val availableDisplayIds = displays.map { it.displayId }.toSet()
 
             val setting = repository.getEffectiveOrientation(
                 packageName = packageName,
@@ -225,7 +238,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun loadInstalledApps() {
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch(ioDispatcher) {
             val packageManager = context.packageManager
 
             // Get recently used apps
@@ -320,9 +333,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun loadAvailableDisplays() {
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch(ioDispatcher) {
             try {
-                val displays = displayManager.displays
+                val availableDisplays = displays
 
                 // First pass: collect display info with ratios
                 data class DisplayInfo(
@@ -333,7 +346,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     val ratio: Float  // Always >= 1.0 (larger dimension / smaller dimension)
                 )
 
-                val displayInfos = displays.mapIndexed { index, display ->
+                val displayInfos = availableDisplays.mapIndexed { index, display ->
                     val screenName = if (index == 0) "Primary" else "Auxiliary"
                     val metrics = android.util.DisplayMetrics()
                     display.getMetrics(metrics)
@@ -586,7 +599,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun requestDrawOverlayPermission() {
         val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION).apply {
-            data = Uri.parse("package:${context.packageName}")
+            data = "package:${context.packageName}".toUri()
             flags = Intent.FLAG_ACTIVITY_NEW_TASK
         }
         context.startActivity(intent)
@@ -641,7 +654,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             // Get display information if specific screen
             var displayInfo = ""
             if (targetScreen is TargetScreen.SpecificScreen) {
-                val display = displayManager.displays.find { it.displayId == targetScreen.id }
+                val display = displays.find { it.displayId == targetScreen.id }
                 if (display != null) {
                     val metrics = android.util.DisplayMetrics()
                     display.getMetrics(metrics)

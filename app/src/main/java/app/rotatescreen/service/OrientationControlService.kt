@@ -1,6 +1,7 @@
 package app.rotatescreen.service
 
 import android.app.Service
+import androidx.core.graphics.toColorInt
 import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.graphics.Color
@@ -303,10 +304,10 @@ class OrientationControlService : Service() {
         displayInfo: String = "",
         aspectRatio: String = "",
         orientation: String = "Auto",
-        color1: Int = android.graphics.Color.parseColor("#B565FF"),
-        color2: Int = android.graphics.Color.parseColor("#00FF41"),
-        color3: Int = android.graphics.Color.parseColor("#FF8C00"),
-        bgColor: Int = android.graphics.Color.parseColor("#1A0D2E"),
+        color1: Int = "#B565FF".toColorInt(),
+        color2: Int = "#00FF41".toColorInt(),
+        color3: Int = "#FF8C00".toColorInt(),
+        bgColor: Int = "#1A0D2E".toColorInt(),
         textColor: Int = android.graphics.Color.WHITE
     ) {
         Either.catch {

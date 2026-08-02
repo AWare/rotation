@@ -1,6 +1,7 @@
 package app.rotatescreen.ui.screen
 
 import android.content.Intent
+import androidx.core.net.toUri
 import android.net.Uri
 import android.provider.Settings
 import androidx.compose.foundation.background
@@ -97,7 +98,7 @@ fun PermissionCheckScreen(
                         buttonLabel = "Settings",
                         onGrant = {
                             val intent = Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS).apply {
-                                data = Uri.parse("package:${context.packageName}")
+                                data = "package:${context.packageName}".toUri()
                                 flags = Intent.FLAG_ACTIVITY_NEW_TASK
                             }
                             context.startActivity(intent)
@@ -113,7 +114,7 @@ fun PermissionCheckScreen(
                         buttonLabel = "Overlay",
                         onGrant = {
                             val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION).apply {
-                                data = Uri.parse("package:${context.packageName}")
+                                data = "package:${context.packageName}".toUri()
                                 flags = Intent.FLAG_ACTIVITY_NEW_TASK
                             }
                             context.startActivity(intent)

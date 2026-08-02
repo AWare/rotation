@@ -26,10 +26,10 @@ The app is built using modern Android development practices and functional progr
 
 ### Tech Stack
 
-- **Kotlin 1.9.21** with functional programming patterns
-- **Arrow 1.2.1** for FP types (Either, Option)
+- **Kotlin 2.3.10** with functional programming patterns
+- **Arrow 2.2.3** for FP types (Either, Option)
 - **Jetpack Compose** with Material 3
-- **Room 2.6.1** for database
+- **Room 2.8.4** for database (schemas exported and migration-tested)
 - **DataStore** for preferences
 - **MVVM** with reactive StateFlow
 
@@ -37,7 +37,7 @@ The app is built using modern Android development practices and functional progr
 
 ```
 app/src/
-├── main/java/com/aware/rotation/
+├── main/java/app/rotatescreen/
 │   ├── domain/model/           # FP domain models (immutable)
 │   ├── data/
 │   │   ├── local/              # Room database
@@ -134,7 +134,7 @@ Or download from [GitHub Releases](../../releases)
 
 ### GitHub Actions
 
-**Build & Test** (on push to `main`/`claude/**` and on PRs):
+**Build & Test** (on push to any branch, and on fork PRs):
 - Runs unit tests, lint and a debug APK build
 - Any of those failing fails the job
 - Uploads test/lint reports and the debug APK
@@ -217,16 +217,27 @@ Never use that flag for anything you intend to distribute.
 ## Database Schema
 
 ```kotlin
-@Entity(tableName = "app_orientations")
+@Entity(
+    tableName = "app_orientations",
+    primaryKeys = ["packageName", "targetScreenId"]  // one row per app per screen
+)
 data class AppOrientationEntity(
-    @PrimaryKey val packageName: String,
+    val packageName: String,
+    val targetScreenId: Int,
     val appName: String,
     val orientationValue: Int,
-    val targetScreenId: Int,
     val targetScreenName: String,
-    val enabled: Boolean,
-    val lastModified: Long
+    val aspectRatioValue: String = "LANDSCAPE",
+    val enabled: Boolean = true,
+    val lastModified: Long = System.currentTimeMillis()
 )
+```
+
+Schemas are exported to `app/schemas` and committed. Bumping the version without
+adding a `Migration` fails `RotationDatabaseMigrationTest` — the database no
+longer falls back to destroying user data.
+
+```kotlin
 ```
 
 ## Building
@@ -241,7 +252,8 @@ data class AppOrientationEntity(
 
 ### Local toolchain
 
-The build needs JDK 17 and the Android SDK (platform 34, build-tools 34.0.0).
+The build needs JDK 17 and the Android SDK. AGP downloads the exact
+compileSdk platform itself, so a recent platform and build-tools is enough.
 Neither has to come from Android Studio; a headless setup is enough to run
 everything CI runs:
 
@@ -263,7 +275,7 @@ export ANDROID_HOME="$HOME/Android/Sdk"
 export PATH="$JAVA_HOME/bin:$ANDROID_HOME/cmdline-tools/latest/bin:$PATH"
 
 yes | sdkmanager --licenses
-sdkmanager --install "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+sdkmanager --install "platform-tools" "platforms;android-36" "build-tools;36.0.0"
 ```
 
 Gradle finds the SDK through `ANDROID_HOME`, so no `local.properties` is needed.

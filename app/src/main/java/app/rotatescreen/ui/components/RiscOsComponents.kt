@@ -373,84 +373,82 @@ fun RiscOsLabel(
 fun Modifier.drawRiscOsBevel(
     isPressed: Boolean = false,
     bevelSize: Dp = 2.dp
-): Modifier = this.then(
-    drawBehind {
-        val bevelPx = bevelSize.toPx()
-        val width = size.width
-        val height = size.height
+): Modifier = this.drawBehind {
+    val bevelPx = bevelSize.toPx()
+    val width = size.width
+    val height = size.height
 
-        if (isPressed) {
-            // Inset/pressed look - dark on top-left, light on bottom-right
-            // Top edge
-            drawLine(
-                color = RiscOsColors.veryDarkGray,
-                start = Offset(0f, 0f),
-                end = Offset(width, 0f),
-                strokeWidth = bevelPx
-            )
-            // Left edge
-            drawLine(
-                color = RiscOsColors.veryDarkGray,
-                start = Offset(0f, 0f),
-                end = Offset(0f, height),
-                strokeWidth = bevelPx
-            )
-            // Inner shadow on top-left
-            drawLine(
-                color = RiscOsColors.darkGray,
-                start = Offset(bevelPx, bevelPx),
-                end = Offset(width - bevelPx, bevelPx),
-                strokeWidth = bevelPx
-            )
-            drawLine(
-                color = RiscOsColors.darkGray,
-                start = Offset(bevelPx, bevelPx),
-                end = Offset(bevelPx, height - bevelPx),
-                strokeWidth = bevelPx
-            )
-        } else {
-            // Raised/outset look - light on top-left, dark on bottom-right
-            // Top edge (white highlight)
-            drawLine(
-                color = RiscOsColors.white,
-                start = Offset(0f, 0f),
-                end = Offset(width, 0f),
-                strokeWidth = bevelPx
-            )
-            // Left edge (white highlight)
-            drawLine(
-                color = RiscOsColors.white,
-                start = Offset(0f, 0f),
-                end = Offset(0f, height),
-                strokeWidth = bevelPx
-            )
-            // Bottom edge (dark shadow)
-            drawLine(
-                color = RiscOsColors.veryDarkGray,
-                start = Offset(0f, height),
-                end = Offset(width, height),
-                strokeWidth = bevelPx
-            )
-            // Right edge (dark shadow)
-            drawLine(
-                color = RiscOsColors.veryDarkGray,
-                start = Offset(width, 0f),
-                end = Offset(width, height),
-                strokeWidth = bevelPx
-            )
-            // Inner shadow on bottom-right
-            drawLine(
-                color = RiscOsColors.darkGray,
-                start = Offset(bevelPx, height - bevelPx),
-                end = Offset(width - bevelPx, height - bevelPx),
-                strokeWidth = bevelPx
-            )
-            drawLine(
-                color = RiscOsColors.darkGray,
-                start = Offset(width - bevelPx, bevelPx),
-                end = Offset(width - bevelPx, height - bevelPx),
-                strokeWidth = bevelPx
-            )
-        }
+    if (isPressed) {
+        // Inset/pressed look - dark on top-left, light on bottom-right
+        // Top edge
+        drawLine(
+            color = RiscOsColors.veryDarkGray,
+            start = Offset(0f, 0f),
+            end = Offset(width, 0f),
+            strokeWidth = bevelPx
+        )
+        // Left edge
+        drawLine(
+            color = RiscOsColors.veryDarkGray,
+            start = Offset(0f, 0f),
+            end = Offset(0f, height),
+            strokeWidth = bevelPx
+        )
+        // Inner shadow on top-left
+        drawLine(
+            color = RiscOsColors.darkGray,
+            start = Offset(bevelPx, bevelPx),
+            end = Offset(width - bevelPx, bevelPx),
+            strokeWidth = bevelPx
+        )
+        drawLine(
+            color = RiscOsColors.darkGray,
+            start = Offset(bevelPx, bevelPx),
+            end = Offset(bevelPx, height - bevelPx),
+            strokeWidth = bevelPx
+        )
+    } else {
+        // Raised/outset look - light on top-left, dark on bottom-right
+        // Top edge (white highlight)
+        drawLine(
+            color = RiscOsColors.white,
+            start = Offset(0f, 0f),
+            end = Offset(width, 0f),
+            strokeWidth = bevelPx
+        )
+        // Left edge (white highlight)
+        drawLine(
+            color = RiscOsColors.white,
+            start = Offset(0f, 0f),
+            end = Offset(0f, height),
+            strokeWidth = bevelPx
+        )
+        // Bottom edge (dark shadow)
+        drawLine(
+            color = RiscOsColors.veryDarkGray,
+            start = Offset(0f, height),
+            end = Offset(width, height),
+            strokeWidth = bevelPx
+        )
+        // Right edge (dark shadow)
+        drawLine(
+            color = RiscOsColors.veryDarkGray,
+            start = Offset(width, 0f),
+            end = Offset(width, height),
+            strokeWidth = bevelPx
+        )
+        // Inner shadow on bottom-right
+        drawLine(
+            color = RiscOsColors.darkGray,
+            start = Offset(bevelPx, height - bevelPx),
+            end = Offset(width - bevelPx, height - bevelPx),
+            strokeWidth = bevelPx
+        )
+        drawLine(
+            color = RiscOsColors.darkGray,
+            start = Offset(width - bevelPx, bevelPx),
+            end = Offset(width - bevelPx, height - bevelPx),
+            strokeWidth = bevelPx
+        )
     }
-)
+}
