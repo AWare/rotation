@@ -22,6 +22,8 @@ import app.rotatescreen.domain.model.*
 import app.rotatescreen.service.OrientationControlService
 import app.rotatescreen.util.AccessibilityChecker
 import app.rotatescreen.util.PermissionChecker
+import app.rotatescreen.ui.components.RiscOsPalette
+import app.rotatescreen.ui.components.RiscOsColors
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
@@ -428,6 +430,36 @@ class MainViewModel @JvmOverloads constructor(
                 it.withDrawOverlayPermission(hasDrawOverlay)
                     .withAccessibilityServiceEnabled(hasAccessibility)
             }
+        }
+    }
+
+    /**
+     * Applies the persisted palette, then keeps it in sync.
+     *
+     * The palette used to live only in memory and was reachable only via
+     * gamepad shoulder buttons, so an e-ink user could neither select a
+     * legible palette on a device without a gamepad nor keep one across
+     * launches.
+     */
+    fun observePalette() {
+        viewModelScope.launch {
+            preferencesManager.paletteName.collect { name ->
+                RiscOsPalette.byName(name)?.let { RiscOsColors.setPalette(it) }
+            }
+        }
+    }
+
+    fun cyclePalette() {
+        RiscOsColors.nextPalette()
+        viewModelScope.launch {
+            preferencesManager.setPaletteName(RiscOsColors.currentPalette.name)
+        }
+    }
+
+    fun cyclePaletteBack() {
+        RiscOsColors.previousPalette()
+        viewModelScope.launch {
+            preferencesManager.setPaletteName(RiscOsColors.currentPalette.name)
         }
     }
 
