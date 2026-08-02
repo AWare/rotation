@@ -1,14 +1,21 @@
 package app.rotatescreen.util
 
-import android.content.ContentResolver
+import android.accessibilityservice.AccessibilityServiceInfo
+import android.content.ComponentName
 import android.content.Context
 import android.os.Build
-import android.provider.Settings
+import android.view.accessibility.AccessibilityManager
 import app.rotatescreen.domain.model.OrientationError
-import arrow.core.Either
-import io.mockk.*
+import app.rotatescreen.service.ForegroundAppDetectorService
+import io.mockk.every
+import io.mockk.mockk
+import io.mockk.unmockkAll
+import io.mockk.verify
 import org.junit.After
-import org.junit.Assert.*
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -16,21 +23,34 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /**
- * Unit tests for AccessibilityChecker
+ * Unit tests for AccessibilityChecker.
+ *
+ * The checker asks AccessibilityManager for the enabled service list and
+ * compares ComponentNames, so these tests drive it through a mocked manager
+ * rather than through the Settings.Secure string it used to parse.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [Build.VERSION_CODES.TIRAMISU])
 class AccessibilityCheckerTest {
 
-    private lateinit var mockContext: Context
-    private lateinit var mockContentResolver: ContentResolver
+    private val packageName = "app.rotatescreen"
+
+    private lateinit var context: Context
+    private lateinit var accessibilityManager: AccessibilityManager
+
+    /** The flattened id AccessibilityManager reports for our own service. */
+    private val ourServiceId: String
+        get() = ComponentName(packageName, ForegroundAppDetectorService::class.java.name)
+            .flattenToString()
 
     @Before
     fun setup() {
-        mockContext = mockk(relaxed = true)
-        mockContentResolver = mockk(relaxed = true)
-        every { mockContext.contentResolver } returns mockContentResolver
-        mockkStatic(Settings.Secure::class)
+        context = mockk(relaxed = true)
+        accessibilityManager = mockk(relaxed = true)
+
+        every { context.packageName } returns packageName
+        every { context.getSystemService(Context.ACCESSIBILITY_SERVICE) } returns accessibilityManager
+        every { accessibilityManager.isEnabled } returns true
     }
 
     @After
@@ -38,348 +58,210 @@ class AccessibilityCheckerTest {
         unmockkAll()
     }
 
-    // isAccessibilityServiceEnabled Tests
+    private fun serviceInfo(id: String): AccessibilityServiceInfo =
+        mockk<AccessibilityServiceInfo>(relaxed = true).also { every { it.id } returns id }
+
+    private fun enabledServices(vararg ids: String) {
+        every {
+            accessibilityManager.getEnabledAccessibilityServiceList(
+                AccessibilityServiceInfo.FEEDBACK_ALL_MASK
+            )
+        } returns ids.map(::serviceInfo)
+    }
+
+    // isAccessibilityServiceEnabled
 
     @Test
-    fun `isAccessibilityServiceEnabled returns Right(true) when service enabled with short name`() {
-        val enabledServices = "app.rotatescreen/.service.ForegroundAppDetectorService:com.other/service"
+    fun `returns Right(true) when our service is the only one enabled`() {
+        enabledServices(ourServiceId)
+
+        val result = AccessibilityChecker.isAccessibilityServiceEnabled(context)
+
+        assertEquals(true, result.getOrNull())
+    }
+
+    @Test
+    fun `returns Right(true) when our service is enabled alongside others`() {
+        enabledServices(
+            "com.other.app/com.other.app.SomeService",
+            ourServiceId,
+            "com.third.app/.AnotherService"
+        )
+
+        val result = AccessibilityChecker.isAccessibilityServiceEnabled(context)
+
+        assertEquals(true, result.getOrNull())
+    }
+
+    @Test
+    fun `returns Right(true) for the shorthand relative class form`() {
+        // ComponentName.unflattenFromString expands a leading dot against the
+        // package, so "pkg/.Service" must match "pkg/pkg.Service".
+        enabledServices("$packageName/.service.ForegroundAppDetectorService")
+
+        val result = AccessibilityChecker.isAccessibilityServiceEnabled(context)
+
+        assertEquals(true, result.getOrNull())
+    }
+
+    @Test
+    fun `returns Right(false) when only other services are enabled`() {
+        enabledServices(
+            "com.other.app/com.other.app.SomeService",
+            "com.third.app/.AnotherService"
+        )
+
+        val result = AccessibilityChecker.isAccessibilityServiceEnabled(context)
+
+        assertEquals(false, result.getOrNull())
+    }
+
+    @Test
+    fun `returns Right(false) when no services are enabled`() {
+        enabledServices()
+
+        val result = AccessibilityChecker.isAccessibilityServiceEnabled(context)
+
+        assertEquals(false, result.getOrNull())
+    }
+
+    @Test
+    fun `returns Right(false) when accessibility is switched off entirely`() {
+        every { accessibilityManager.isEnabled } returns false
+        enabledServices(ourServiceId)
+
+        val result = AccessibilityChecker.isAccessibilityServiceEnabled(context)
+
+        assertEquals(false, result.getOrNull())
+    }
+
+    @Test
+    fun `returns Right(false) when the accessibility service is unavailable`() {
+        every { context.getSystemService(Context.ACCESSIBILITY_SERVICE) } returns null
+
+        val result = AccessibilityChecker.isAccessibilityServiceEnabled(context)
+
+        assertEquals(false, result.getOrNull())
+    }
+
+    @Test
+    fun `ignores malformed service ids without failing`() {
+        // unflattenFromString returns null for an id with no '/' separator.
+        enabledServices("not-a-component-name", ourServiceId)
+
+        val result = AccessibilityChecker.isAccessibilityServiceEnabled(context)
+
+        assertEquals(true, result.getOrNull())
+    }
+
+    @Test
+    fun `does not match a same-named service from another package`() {
+        enabledServices("com.impostor/app.rotatescreen.service.ForegroundAppDetectorService")
+
+        val result = AccessibilityChecker.isAccessibilityServiceEnabled(context)
+
+        assertEquals(false, result.getOrNull())
+    }
+
+    @Test
+    fun `returns Left when the manager throws`() {
         every {
-            Settings.Secure.getString(
-                mockContentResolver,
-                Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
-            )
-        } returns enabledServices
+            accessibilityManager.getEnabledAccessibilityServiceList(any())
+        } throws SecurityException("denied")
 
-        val result = AccessibilityChecker.isAccessibilityServiceEnabled(mockContext)
+        val result = AccessibilityChecker.isAccessibilityServiceEnabled(context)
 
-        assertTrue(result.isRight())
-        result.fold(
-            { fail("Should not be Left") },
-            { isEnabled -> assertTrue(isEnabled) }
+        assertTrue(result.isLeft())
+        assertEquals(
+            OrientationError.ServiceNotRunning("ForegroundAppDetectorService"),
+            result.leftOrNull()
         )
     }
 
     @Test
-    fun `isAccessibilityServiceEnabled returns Right(true) when service enabled with full name`() {
-        val enabledServices = "app.rotatescreen/app.rotatescreen.service.ForegroundAppDetectorService"
+    fun `Left carries the supplied service name`() {
         every {
-            Settings.Secure.getString(
-                mockContentResolver,
-                Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
-            )
-        } returns enabledServices
+            accessibilityManager.getEnabledAccessibilityServiceList(any())
+        } throws SecurityException("denied")
 
-        val result = AccessibilityChecker.isAccessibilityServiceEnabled(mockContext)
+        val result = AccessibilityChecker.isAccessibilityServiceEnabled(context, "CustomService")
 
-        assertTrue(result.isRight())
-        result.fold(
-            { fail("Should not be Left") },
-            { isEnabled -> assertTrue(isEnabled) }
+        assertEquals(
+            OrientationError.ServiceNotRunning("CustomService"),
+            result.leftOrNull()
         )
     }
 
     @Test
-    fun `isAccessibilityServiceEnabled returns Right(false) when service not enabled`() {
-        val enabledServices = "com.other.app/.SomeService:com.another/.OtherService"
-        every {
-            Settings.Secure.getString(
-                mockContentResolver,
-                Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
-            )
-        } returns enabledServices
+    fun `queries the manager with the all-feedback mask`() {
+        enabledServices(ourServiceId)
 
-        val result = AccessibilityChecker.isAccessibilityServiceEnabled(mockContext)
+        AccessibilityChecker.isAccessibilityServiceEnabled(context)
+
+        verify {
+            accessibilityManager.getEnabledAccessibilityServiceList(
+                AccessibilityServiceInfo.FEEDBACK_ALL_MASK
+            )
+        }
+    }
+
+    @Test
+    fun `does not report enabled when every id is malformed`() {
+        enabledServices("garbage", "also/", "/nope")
+
+        val result = AccessibilityChecker.isAccessibilityServiceEnabled(context)
+
+        assertFalse(result.getOrNull() ?: true)
+    }
+
+    // checkAccessibilityServiceEnabled
+
+    @Test
+    fun `check returns Right(Unit) when our service is enabled`() {
+        enabledServices(ourServiceId)
+
+        val result = AccessibilityChecker.checkAccessibilityServiceEnabled(context)
 
         assertTrue(result.isRight())
-        result.fold(
-            { fail("Should not be Left") },
-            { isEnabled -> assertFalse(isEnabled) }
+    }
+
+    @Test
+    fun `check returns Left when our service is not enabled`() {
+        enabledServices("com.other.app/com.other.app.SomeService")
+
+        val result = AccessibilityChecker.checkAccessibilityServiceEnabled(context)
+
+        assertTrue(result.isLeft())
+        assertEquals(
+            OrientationError.ServiceNotRunning("ForegroundAppDetectorService"),
+            result.leftOrNull()
         )
     }
 
     @Test
-    fun `isAccessibilityServiceEnabled returns Right(false) when no services enabled`() {
-        every {
-            Settings.Secure.getString(
-                mockContentResolver,
-                Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
-            )
-        } returns ""
+    fun `check returns Left with the supplied service name when not enabled`() {
+        enabledServices()
 
-        val result = AccessibilityChecker.isAccessibilityServiceEnabled(mockContext)
+        val result = AccessibilityChecker.checkAccessibilityServiceEnabled(context, "CustomService")
 
-        assertTrue(result.isRight())
-        result.fold(
-            { fail("Should not be Left") },
-            { isEnabled -> assertFalse(isEnabled) }
+        assertEquals(
+            OrientationError.ServiceNotRunning("CustomService"),
+            result.leftOrNull()
         )
     }
 
     @Test
-    fun `isAccessibilityServiceEnabled returns Right(false) when settings returns null`() {
+    fun `check propagates a Left from the underlying query`() {
         every {
-            Settings.Secure.getString(
-                mockContentResolver,
-                Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
-            )
-        } returns null
+            accessibilityManager.getEnabledAccessibilityServiceList(any())
+        } throws SecurityException("denied")
 
-        val result = AccessibilityChecker.isAccessibilityServiceEnabled(mockContext)
-
-        assertTrue(result.isRight())
-        result.fold(
-            { fail("Should not be Left") },
-            { isEnabled -> assertFalse(isEnabled) }
-        )
-    }
-
-    @Test
-    fun `isAccessibilityServiceEnabled returns Left when exception thrown`() {
-        every {
-            Settings.Secure.getString(
-                mockContentResolver,
-                Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
-            )
-        } throws SecurityException("Test exception")
-
-        val result = AccessibilityChecker.isAccessibilityServiceEnabled(mockContext)
+        val result = AccessibilityChecker.checkAccessibilityServiceEnabled(context)
 
         assertTrue(result.isLeft())
         result.fold(
-            { error ->
-                assertTrue(error is OrientationError.ServiceNotRunning)
-            },
+            { error -> assertTrue(error is OrientationError.ServiceNotRunning) },
             { fail("Should not be Right") }
-        )
-    }
-
-    @Test
-    fun `isAccessibilityServiceEnabled works with custom service name`() {
-        val customService = "com.custom/.CustomService"
-        val enabledServices = "com.custom/.CustomService:com.other/.OtherService"
-        every {
-            Settings.Secure.getString(
-                mockContentResolver,
-                Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
-            )
-        } returns enabledServices
-
-        val result = AccessibilityChecker.isAccessibilityServiceEnabled(mockContext, customService)
-
-        assertTrue(result.isRight())
-        result.fold(
-            { fail("Should not be Left") },
-            { isEnabled -> assertTrue(isEnabled) }
-        )
-    }
-
-    @Test
-    fun `isAccessibilityServiceEnabled handles service name at start of list`() {
-        val enabledServices = "app.rotatescreen/.service.ForegroundAppDetectorService:com.other/.Service"
-        every {
-            Settings.Secure.getString(
-                mockContentResolver,
-                Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
-            )
-        } returns enabledServices
-
-        val result = AccessibilityChecker.isAccessibilityServiceEnabled(mockContext)
-
-        assertTrue(result.isRight())
-        result.fold(
-            { fail("Should not be Left") },
-            { isEnabled -> assertTrue(isEnabled) }
-        )
-    }
-
-    @Test
-    fun `isAccessibilityServiceEnabled handles service name at end of list`() {
-        val enabledServices = "com.other/.Service:app.rotatescreen/.service.ForegroundAppDetectorService"
-        every {
-            Settings.Secure.getString(
-                mockContentResolver,
-                Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
-            )
-        } returns enabledServices
-
-        val result = AccessibilityChecker.isAccessibilityServiceEnabled(mockContext)
-
-        assertTrue(result.isRight())
-        result.fold(
-            { fail("Should not be Left") },
-            { isEnabled -> assertTrue(isEnabled) }
-        )
-    }
-
-    @Test
-    fun `isAccessibilityServiceEnabled handles service name in middle of list`() {
-        val enabledServices = "com.first/.Service:app.rotatescreen/.service.ForegroundAppDetectorService:com.last/.Service"
-        every {
-            Settings.Secure.getString(
-                mockContentResolver,
-                Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
-            )
-        } returns enabledServices
-
-        val result = AccessibilityChecker.isAccessibilityServiceEnabled(mockContext)
-
-        assertTrue(result.isRight())
-        result.fold(
-            { fail("Should not be Left") },
-            { isEnabled -> assertTrue(isEnabled) }
-        )
-    }
-
-    // checkAccessibilityServiceEnabled Tests
-
-    @Test
-    fun `checkAccessibilityServiceEnabled returns Right(Unit) when service enabled`() {
-        val enabledServices = "app.rotatescreen/.service.ForegroundAppDetectorService"
-        every {
-            Settings.Secure.getString(
-                mockContentResolver,
-                Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
-            )
-        } returns enabledServices
-
-        val result = AccessibilityChecker.checkAccessibilityServiceEnabled(mockContext)
-
-        assertTrue(result.isRight())
-        result.fold(
-            { fail("Should not be Left") },
-            { assertEquals(Unit, it) }
-        )
-    }
-
-    @Test
-    fun `checkAccessibilityServiceEnabled returns Left when service not enabled`() {
-        val enabledServices = "com.other/.Service"
-        every {
-            Settings.Secure.getString(
-                mockContentResolver,
-                Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
-            )
-        } returns enabledServices
-
-        val result = AccessibilityChecker.checkAccessibilityServiceEnabled(mockContext)
-
-        assertTrue(result.isLeft())
-        result.fold(
-            { error ->
-                assertTrue(error is OrientationError.ServiceNotRunning)
-                assertEquals(
-                    "app.rotatescreen/.service.ForegroundAppDetectorService",
-                    (error as OrientationError.ServiceNotRunning).serviceName
-                )
-            },
-            { fail("Should not be Right") }
-        )
-    }
-
-    @Test
-    fun `checkAccessibilityServiceEnabled returns Left when exception thrown`() {
-        every {
-            Settings.Secure.getString(
-                mockContentResolver,
-                Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
-            )
-        } throws RuntimeException("Test error")
-
-        val result = AccessibilityChecker.checkAccessibilityServiceEnabled(mockContext)
-
-        assertTrue(result.isLeft())
-    }
-
-    @Test
-    fun `checkAccessibilityServiceEnabled works with custom service name`() {
-        val customService = "com.custom/.CustomService"
-        val enabledServices = "com.custom/.CustomService"
-        every {
-            Settings.Secure.getString(
-                mockContentResolver,
-                Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
-            )
-        } returns enabledServices
-
-        val result = AccessibilityChecker.checkAccessibilityServiceEnabled(mockContext, customService)
-
-        assertTrue(result.isRight())
-    }
-
-    // Edge Cases
-
-    @Test
-    fun `handles empty string gracefully`() {
-        every {
-            Settings.Secure.getString(
-                mockContentResolver,
-                Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
-            )
-        } returns ""
-
-        val result = AccessibilityChecker.isAccessibilityServiceEnabled(mockContext)
-
-        assertTrue(result.isRight())
-        result.fold(
-            { fail("Should not be Left") },
-            { isEnabled -> assertFalse(isEnabled) }
-        )
-    }
-
-    @Test
-    fun `handles whitespace string gracefully`() {
-        every {
-            Settings.Secure.getString(
-                mockContentResolver,
-                Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
-            )
-        } returns "   "
-
-        val result = AccessibilityChecker.isAccessibilityServiceEnabled(mockContext)
-
-        assertTrue(result.isRight())
-        result.fold(
-            { fail("Should not be Left") },
-            { isEnabled -> assertFalse(isEnabled) }
-        )
-    }
-
-    @Test
-    fun `multiple sequential calls work correctly`() {
-        val enabledServices = "app.rotatescreen/.service.ForegroundAppDetectorService"
-        every {
-            Settings.Secure.getString(
-                mockContentResolver,
-                Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
-            )
-        } returns enabledServices
-
-        val result1 = AccessibilityChecker.isAccessibilityServiceEnabled(mockContext)
-        val result2 = AccessibilityChecker.checkAccessibilityServiceEnabled(mockContext)
-        val result3 = AccessibilityChecker.isAccessibilityServiceEnabled(mockContext)
-
-        assertTrue(result1.isRight())
-        assertTrue(result2.isRight())
-        assertTrue(result3.isRight())
-    }
-
-    @Test
-    fun `does not match partial service names`() {
-        // Service name is a substring but not exact match
-        val enabledServices = "app.rotatescreen/.service.ForegroundAppDetectorServiceExtra"
-        every {
-            Settings.Secure.getString(
-                mockContentResolver,
-                Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
-            )
-        } returns enabledServices
-
-        val result = AccessibilityChecker.isAccessibilityServiceEnabled(mockContext)
-
-        assertTrue(result.isRight())
-        result.fold(
-            { fail("Should not be Left") },
-            { isEnabled -> assertTrue(isEnabled) } // contains() will match this
         )
     }
 }

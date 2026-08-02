@@ -94,17 +94,17 @@ class OrientationRepositoryTest {
             targetScreenName = "All",
             enabled = true
         )
-        coEvery { dao.getByPackageName("com.test") } returns entity
+        coEvery { dao.getByPackageName("com.test") } returns listOf(entity)
 
         val result = repository.getSetting("com.test")
 
         assertTrue(result.isRight())
-        assertEquals("com.test", result.getOrNull()?.packageName)
+        assertEquals("com.test", result.getOrNull()?.single()?.packageName)
     }
 
     @Test
     fun `getSetting returns Left when setting does not exist`() = runTest {
-        coEvery { dao.getByPackageName("com.missing") } returns null
+        coEvery { dao.getByPackageName("com.missing") } returns emptyList()
 
         val result = repository.getSetting("com.missing")
 
@@ -200,12 +200,12 @@ class OrientationRepositoryTest {
             targetScreenName = "All",
             enabled = true
         )
-        every { dao.observeByPackageName("com.test") } returns flowOf(entity)
+        every { dao.observeByPackageName("com.test") } returns flowOf(listOf(entity))
 
         repository.observeSetting("com.test").test {
-            val setting = awaitItem()
-            assertNotNull(setting)
-            assertEquals("com.test", setting?.packageName)
+            val settings = awaitItem()
+            assertEquals(1, settings.size)
+            assertEquals("com.test", settings.single().packageName)
             awaitComplete()
         }
     }

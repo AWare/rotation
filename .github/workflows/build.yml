@@ -6,9 +6,25 @@ on:
   pull_request:
     branches: [ main ]
 
+# A newer push to the same ref makes an in-flight run irrelevant.
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    # GitHub's implicit shell is `bash -e`, which has no pipefail: any step that
+    # pipes gradle into another command (tee, grep) reports the *pipe's* exit
+    # code and passes even when the build failed. `shell: bash` is
+    # `bash --noprofile --norc -eo pipefail`, so failures actually fail.
+    shell: bash
+
 jobs:
-  test:
-    name: Run Tests
+  check:
+    name: Test, lint and build
     runs-on: ubuntu-latest
 
     steps:
@@ -20,176 +36,47 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: gradle
 
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          # Refuses to run if gradle-wrapper.jar is not a known-good release.
+          validate-wrappers: true
 
+      # Each of these fails the job on its own. They are separate steps so the
+      # Actions UI names the stage that broke rather than one opaque "gradle".
       - name: Run unit tests
-        id: test
-        continue-on-error: true
-        run: ./gradlew test --stacktrace 2>&1 | tee test-output.log
+        run: ./gradlew testDebugUnitTest --stacktrace
 
-      - name: Comment test errors on PR
-        if: steps.test.outcome == 'failure' && github.event_name == 'pull_request'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const fs = require('fs');
-            const output = fs.readFileSync('test-output.log', 'utf8');
-            const errors = output.split('\n').filter(line => line.includes('error:') || line.includes('e:') || line.includes('FAILED')).slice(0, 50);
-
-            if (errors.length > 0) {
-              const comment = `## ❌ Test Failures\n\n\`\`\`\n${errors.join('\n')}\n\`\`\`\n\n[View full logs](${context.payload.pull_request.html_url}/checks)`;
-
-              github.rest.issues.createComment({
-                issue_number: context.issue.number,
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                body: comment
-              });
-            }
-
-      - name: Fail job if tests failed
-        if: steps.test.outcome == 'failure'
-        run: exit 1
-
-      - name: Upload test results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-results
-          path: app/build/test-results/
-          retention-days: 7
-
-      - name: Upload test reports
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-reports
-          path: app/build/reports/tests/
-          retention-days: 7
-
-  build:
-    name: Build APK
-    runs-on: ubuntu-latest
-    needs: test
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-          cache: gradle
-
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
+      - name: Run lint
+        run: ./gradlew lintDebug --stacktrace
 
       - name: Build debug APK
-        id: build
-        continue-on-error: true
-        run: ./gradlew assembleDebug --stacktrace 2>&1 | tee build-output.log
+        run: ./gradlew assembleDebug --stacktrace
 
-      - name: Comment build errors on PR
-        if: steps.build.outcome == 'failure' && github.event_name == 'pull_request'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const fs = require('fs');
-            const output = fs.readFileSync('build-output.log', 'utf8');
-            const errors = output.split('\n').filter(line => line.includes('error:') || line.includes('e:') || line.includes('FAILED') || line.includes('Unresolved reference')).slice(0, 50);
-
-            if (errors.length > 0) {
-              const comment = `## ❌ Build Failures\n\n\`\`\`\n${errors.join('\n')}\n\`\`\`\n\n[View full logs](${context.payload.pull_request.html_url}/checks)`;
-
-              github.rest.issues.createComment({
-                issue_number: context.issue.number,
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                body: comment
-              });
-            }
-
-      - name: Fail job if build failed
-        if: steps.build.outcome == 'failure'
-        run: exit 1
-
-      - name: Verify APK was created
-        if: steps.build.outcome == 'success'
+      - name: Verify APK was produced
         run: |
-          echo "Checking for APK files..."
-          ls -lh app/build/outputs/apk/debug/ || echo "APK directory not found!"
-          APK_COUNT=$(find app/build/outputs/apk/debug/ -name "*.apk" -type f 2>/dev/null | wc -l)
-          if [ "$APK_COUNT" -eq 0 ]; then
-            echo "ERROR: No APK files found!"
+          count=$(find app/build/outputs/apk/debug -name '*.apk' -type f | wc -l)
+          if [ "$count" -eq 0 ]; then
+            echo "::error::assembleDebug succeeded but produced no APK"
             exit 1
           fi
-          echo "Found $APK_COUNT APK file(s)"
+          echo "Found $count APK(s)"
+
+      - name: Upload test and lint reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reports
+          path: |
+            app/build/reports/
+            app/build/test-results/
+          retention-days: 7
 
       - name: Upload debug APK
-        if: steps.build.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: app-debug
           path: app/build/outputs/apk/debug/*.apk
-          retention-days: 30
           if-no-files-found: error
-
-  lint:
-    name: Run Lint
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-          cache: gradle
-
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
-
-      - name: Run lint
-        id: lint
-        continue-on-error: true
-        run: ./gradlew lint --stacktrace 2>&1 | tee lint-output.log
-
-      - name: Comment lint errors on PR
-        if: steps.lint.outcome == 'failure' && github.event_name == 'pull_request'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const fs = require('fs');
-            const output = fs.readFileSync('lint-output.log', 'utf8');
-            const errors = output.split('\n').filter(line => line.includes('error:') || line.includes('e:') || line.includes('FAILED') || line.includes('Unresolved reference')).slice(0, 50);
-
-            if (errors.length > 0) {
-              const comment = `## ❌ Lint Failures\n\n\`\`\`\n${errors.join('\n')}\n\`\`\`\n\n[View full logs](${context.payload.pull_request.html_url}/checks)`;
-
-              github.rest.issues.createComment({
-                issue_number: context.issue.number,
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                body: comment
-              });
-            }
-
-      - name: Fail job if lint failed
-        if: steps.lint.outcome == 'failure'
-        run: exit 1
-
-      - name: Upload lint results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: lint-results
-          path: app/build/reports/lint-results*.html
-          retention-days: 7
+          retention-days: 30

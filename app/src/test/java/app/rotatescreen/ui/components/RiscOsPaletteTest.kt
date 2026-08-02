@@ -91,10 +91,10 @@ class RiscOsPaletteTest {
     }
 
     @Test
-    fun `All palettes list contains all four palettes`() {
+    fun `All palettes list contains the built-in palettes`() {
         val all = RiscOsPalette.All
 
-        assertEquals(4, all.size)
+        assertEquals(8, all.size)
         assertTrue(all.contains(RiscOsPalette.Classic))
         assertTrue(all.contains(RiscOsPalette.Aqua))
         assertTrue(all.contains(RiscOsPalette.Sand))
@@ -144,8 +144,8 @@ class RiscOsPaletteTest {
         RiscOsColors.nextPalette()
         assertEquals(RiscOsPalette.Dark, RiscOsColors.currentPalette)
 
-        // Next should wrap around to Classic
-        RiscOsColors.nextPalette()
+        // Advancing through the remainder wraps back around to Classic.
+        repeat(RiscOsPalette.All.size - 3) { RiscOsColors.nextPalette() }
         assertEquals(RiscOsPalette.Classic, RiscOsColors.currentPalette)
     }
 
@@ -154,20 +154,21 @@ class RiscOsPaletteTest {
         // Start with Classic
         assertEquals(RiscOsPalette.Classic, RiscOsColors.currentPalette)
 
-        // Previous should wrap to Dark
-        RiscOsColors.previousPalette()
-        assertEquals(RiscOsPalette.Dark, RiscOsColors.currentPalette)
+        val all = RiscOsPalette.All
 
-        // Previous should be Sand
+        // Previous from the first entry wraps to the last
         RiscOsColors.previousPalette()
-        assertEquals(RiscOsPalette.Sand, RiscOsColors.currentPalette)
+        assertEquals(all.last(), RiscOsColors.currentPalette)
 
-        // Previous should be Aqua
+        // …then walks backwards one at a time
         RiscOsColors.previousPalette()
-        assertEquals(RiscOsPalette.Aqua, RiscOsColors.currentPalette)
+        assertEquals(all[all.size - 2], RiscOsColors.currentPalette)
 
-        // Previous should be Classic
         RiscOsColors.previousPalette()
+        assertEquals(all[all.size - 3], RiscOsColors.currentPalette)
+
+        // Walking back the rest of the way returns to Classic
+        repeat(all.size - 3) { RiscOsColors.previousPalette() }
         assertEquals(RiscOsPalette.Classic, RiscOsColors.currentPalette)
     }
 
@@ -209,18 +210,20 @@ class RiscOsPaletteTest {
             RiscOsColors.nextPalette()
         }
 
-        // Should wrap around: 10 % 4 = 2, so should be Sand (index 2)
-        assertEquals(RiscOsPalette.Sand, RiscOsColors.currentPalette)
+        // Starting from Classic (index 0), 10 steps lands on 10 % size
+        assertEquals(RiscOsPalette.All[10 % RiscOsPalette.All.size], RiscOsColors.currentPalette)
     }
 
     @Test
     fun `multiple previousPalette calls work correctly`() {
+        val size = RiscOsPalette.All.size
+
         for (i in 1..10) {
             RiscOsColors.previousPalette()
         }
 
-        // Should wrap around backwards: -10 % 4 = 2, so should be Sand (index 2)
-        assertEquals(RiscOsPalette.Sand, RiscOsColors.currentPalette)
+        // Starting from Classic (index 0), 10 steps back lands on -10 mod size
+        assertEquals(RiscOsPalette.All[((-10 % size) + size) % size], RiscOsColors.currentPalette)
     }
 
     @Test
@@ -248,7 +251,7 @@ class RiscOsPaletteTest {
     @Test
     fun `each palette has unique name`() {
         val names = RiscOsPalette.All.map { it.name }.toSet()
-        assertEquals(4, names.size) // All names should be unique
+        assertEquals(RiscOsPalette.All.size, names.size) // All names should be unique
     }
 
     @Test

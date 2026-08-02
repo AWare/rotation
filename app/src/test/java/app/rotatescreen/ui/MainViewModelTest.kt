@@ -72,7 +72,7 @@ class MainViewModelTest {
         every { context.getSystemService(Context.DISPLAY_SERVICE) } returns displayManager
 
         // Mock database
-        mockkStatic(RotationDatabase::class)
+        mockkObject(RotationDatabase.Companion)
         every { RotationDatabase.getInstance(any()) } returns database
         every { database.appOrientationDao() } returns dao
         every { dao.getAll() } returns flowOf(emptyList())
@@ -89,13 +89,13 @@ class MainViewModelTest {
         every { displayManager.displays } returns arrayOf(mockDisplay)
 
         // Mock static utility classes
-        mockkStatic(PermissionChecker::class)
-        mockkStatic(AccessibilityChecker::class)
+        mockkObject(PermissionChecker)
+        mockkObject(AccessibilityChecker)
         every { PermissionChecker.hasDrawOverlayPermission(any()) } returns Either.Right(false)
         every { AccessibilityChecker.isAccessibilityServiceEnabled(any()) } returns Either.Right(false)
 
         // Default mock for queryIntentActivities
-        every { packageManager.queryIntentActivities(any(), any<Int>()) } returns emptyList()
+        every { packageManager.queryIntentActivities(any(), any<PackageManager.ResolveInfoFlags>()) } returns emptyList()
     }
 
     @After
@@ -113,7 +113,7 @@ class MainViewModelTest {
             createResolveInfo("com.example.app2", "App 2")
         )
 
-        every { packageManager.queryIntentActivities(any(), any<Int>()) } returns launcherApps
+        every { packageManager.queryIntentActivities(any(), any<PackageManager.ResolveInfoFlags>()) } returns launcherApps
 
         // Act
         val viewModel = MainViewModel(application)
@@ -137,7 +137,7 @@ class MainViewModelTest {
             createResolveInfo("com.example.corrupted", "Corrupted App")
         )
 
-        every { packageManager.queryIntentActivities(any(), any<Int>()) } returns launcherApps
+        every { packageManager.queryIntentActivities(any(), any<PackageManager.ResolveInfoFlags>()) } returns launcherApps
         every { packageManager.getApplicationInfo("com.example.corrupted", 0) } throws Exception("App corrupted")
 
         // Act
@@ -161,7 +161,7 @@ class MainViewModelTest {
             createResolveInfo("com.example.camera", "Camera")
         )
 
-        every { packageManager.queryIntentActivities(any(), any<Int>()) } returns launcherApps
+        every { packageManager.queryIntentActivities(any(), any<PackageManager.ResolveInfoFlags>()) } returns launcherApps
 
         val viewModel = MainViewModel(application)
         testScheduler.advanceUntilIdle()
@@ -172,7 +172,11 @@ class MainViewModelTest {
 
         // Assert
         viewModel.filteredApps.test {
-            val filtered = awaitItem()
+            // filteredApps is stateIn(WhileSubscribed), so it is inactive until
+            // collected here: the first emission is the initial empty value and
+            // the combine only runs once subscribed.
+            testScheduler.advanceUntilIdle()
+            val filtered = expectMostRecentItem()
             assertEquals(2, filtered.size)
             assertTrue(filtered.any { it.appName == "Calculator" })
             assertTrue(filtered.any { it.appName == "Calendar" })
@@ -200,7 +204,7 @@ class MainViewModelTest {
             )
         )
 
-        every { packageManager.queryIntentActivities(any(), any<Int>()) } returns launcherApps
+        every { packageManager.queryIntentActivities(any(), any<PackageManager.ResolveInfoFlags>()) } returns launcherApps
         every { dao.getAll() } returns flowOf(savedSettings.map { it.toEntity() })
 
         // Act
@@ -227,7 +231,7 @@ class MainViewModelTest {
             createResolveInfo("com.example.app", "Test App")
         )
 
-        every { packageManager.queryIntentActivities(any(), any<Int>()) } returns launcherApps
+        every { packageManager.queryIntentActivities(any(), any<PackageManager.ResolveInfoFlags>()) } returns launcherApps
         coEvery { dao.insert(any()) } just Runs
 
         val viewModel = MainViewModel(application)
@@ -238,7 +242,7 @@ class MainViewModelTest {
         testScheduler.advanceUntilIdle()
 
         // Assert - verify queryIntentActivities called again after save
-        verify(atLeast = 2) { packageManager.queryIntentActivities(any(), any<Int>()) }
+        verify(atLeast = 2) { packageManager.queryIntentActivities(any(), any<PackageManager.ResolveInfoFlags>()) }
     }
 
     @Test
@@ -248,7 +252,7 @@ class MainViewModelTest {
             createResolveInfo("com.example.app", "Test App")
         )
 
-        every { packageManager.queryIntentActivities(any(), any<Int>()) } returns launcherApps
+        every { packageManager.queryIntentActivities(any(), any<PackageManager.ResolveInfoFlags>()) } returns launcherApps
         coEvery { dao.delete(any()) } just Runs
 
         val viewModel = MainViewModel(application)
@@ -259,7 +263,7 @@ class MainViewModelTest {
         testScheduler.advanceUntilIdle()
 
         // Assert
-        verify(atLeast = 2) { packageManager.queryIntentActivities(any(), any<Int>()) }
+        verify(atLeast = 2) { packageManager.queryIntentActivities(any(), any<PackageManager.ResolveInfoFlags>()) }
     }
 
     @Test
@@ -271,7 +275,7 @@ class MainViewModelTest {
             createResolveInfo("com.example.different", "Different App")
         )
 
-        every { packageManager.queryIntentActivities(any(), any<Int>()) } returns launcherApps
+        every { packageManager.queryIntentActivities(any(), any<PackageManager.ResolveInfoFlags>()) } returns launcherApps
 
         // Act
         val viewModel = MainViewModel(application)
@@ -292,7 +296,7 @@ class MainViewModelTest {
         every { dao.getAll() } returns flowOf()
 
         val launcherApps = listOf(createResolveInfo("com.example.app", "Test App"))
-        every { packageManager.queryIntentActivities(any(), any<Int>()) } returns launcherApps
+        every { packageManager.queryIntentActivities(any(), any<PackageManager.ResolveInfoFlags>()) } returns launcherApps
 
         // Act - Should not throw NoSuchElementException
         val viewModel = MainViewModel(application)
@@ -325,7 +329,7 @@ class MainViewModelTest {
     fun `applyOrientation handles service start exceptions`() = runTest {
         // Arrange
         every { context.startService(any()) } throws SecurityException("No permission")
-        coEvery { anyConstructed<PreferencesManager>().setGlobalOrientation(any()) } just Runs
+        coEvery { anyConstructed<PreferencesManager>().setGlobalOrientation(any()) } returns Either.Right(Unit)
 
         val viewModel = MainViewModel(application)
         testScheduler.advanceUntilIdle()
@@ -405,7 +409,7 @@ class MainViewModelTest {
             createResolveInfo("com.instagram.android", "Instagram")
         )
 
-        every { packageManager.queryIntentActivities(any(), any<Int>()) } returns launcherApps
+        every { packageManager.queryIntentActivities(any(), any<PackageManager.ResolveInfoFlags>()) } returns launcherApps
 
         // Act
         val viewModel = MainViewModel(application)
@@ -413,14 +417,16 @@ class MainViewModelTest {
 
         // Assert - Verify queryIntentActivities called with correct flags
         verify {
+            // queryIntentActivities is overloaded (Int flags vs ResolveInfoFlags);
+            // on TIRAMISU+ the ViewModel calls the ResolveInfoFlags one.
             packageManager.queryIntentActivities(
-                match { intent ->
+                match<Intent> { intent ->
                     intent.action == Intent.ACTION_MAIN &&
                     intent.categories?.contains(Intent.CATEGORY_LAUNCHER) == true
                 },
-                match { flags ->
+                match<PackageManager.ResolveInfoFlags> { flags ->
                     // Verify flags include MATCH_DISABLED_COMPONENTS
-                    (flags and PackageManager.MATCH_DISABLED_COMPONENTS) != 0
+                    (flags.value.toInt() and PackageManager.MATCH_DISABLED_COMPONENTS) != 0
                 }
             )
         }
@@ -443,7 +449,7 @@ class MainViewModelTest {
             createResolveInfo("com.example.disabled_until_used", "Disabled Until Used App")
         )
 
-        every { packageManager.queryIntentActivities(any(), any<Int>()) } returns launcherApps
+        every { packageManager.queryIntentActivities(any(), any<PackageManager.ResolveInfoFlags>()) } returns launcherApps
 
         // Act
         val viewModel = MainViewModel(application)
@@ -479,8 +485,9 @@ class MainViewModelTest {
     private fun AppOrientationSetting.toEntity() = app.rotatescreen.data.local.entity.AppOrientationEntity(
         packageName = packageName,
         appName = appName,
-        orientation = orientation.value,
+        orientationValue = orientation.value,
         targetScreenId = targetScreen.id,
+        targetScreenName = targetScreen.displayName,
         enabled = enabled
     )
 }
