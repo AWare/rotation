@@ -4,7 +4,6 @@ import android.app.ActivityManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import android.hardware.display.DisplayManager
 import android.os.Build
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
@@ -30,10 +29,6 @@ class CurrentAppTileService : TileService() {
     private var serviceScope: CoroutineScope? = null
     private var repository: OrientationRepository? = null
     private var currentAppPackage: String? = null
-    private val displayManager by lazy {
-        getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
-    }
-
     private val orientationCycle = listOf(
         ScreenOrientation.Unspecified,
         ScreenOrientation.Portrait,
@@ -260,10 +255,6 @@ class CurrentAppTileService : TileService() {
      * Check if usage stats permission is granted
      */
     private fun checkUsageStatsPermission(): Boolean {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP_MR1) {
-            return false
-        }
-
         val usageStatsManager = getSystemService(USAGE_STATS_SERVICE) as? android.app.usage.UsageStatsManager
             ?: return false
 
@@ -290,11 +281,6 @@ class CurrentAppTileService : TileService() {
      * FP: Uses immutable data structures and pure transformations
      */
     private fun getCurrentForegroundApp(): String? {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP_MR1) {
-            android.util.Log.w("CurrentAppTileService", "UsageStats not available on this Android version")
-            return null
-        }
-
         val usageStatsManager = getSystemService(USAGE_STATS_SERVICE) as? android.app.usage.UsageStatsManager
         if (usageStatsManager == null) {
             android.util.Log.e("CurrentAppTileService", "UsageStatsManager not available")

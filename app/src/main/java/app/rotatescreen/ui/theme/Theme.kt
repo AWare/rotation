@@ -1,7 +1,6 @@
 package app.rotatescreen.ui.theme
 
 import android.app.Activity
-import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
@@ -46,14 +45,10 @@ fun RotationTheme(
             // Set status bar color to match NGE theme
             window.statusBarColor = NGEDark.toArgb()
             // Set navigation bar color to match
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                window.navigationBarColor = NGEDark.toArgb()
-            }
+            window.navigationBarColor = NGEDark.toArgb()
             // Use light icons (white) for dark background
             WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = false
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                WindowCompat.getInsetsController(window, view).isAppearanceLightNavigationBars = false
-            }
+            WindowCompat.getInsetsController(window, view).isAppearanceLightNavigationBars = false
         }
     }
 

@@ -8,6 +8,12 @@ plugins {
     id("com.google.devtools.ksp")
 }
 
+// Room writes each schema version here. These files are committed: without
+// them there is nothing to write a migration against, and no way to test one.
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
+}
+
 // Release signing material. Environment variables win over keystore.properties
 // so CI can inject secrets without writing a file to the workspace.
 val keystoreProperties = Properties().apply {
@@ -52,6 +58,14 @@ android {
         vectorDrawables {
             useSupportLibrary = true
         }
+    }
+
+    // Migration tests need the exported schemas as *assets*. Robolectric reads
+    // the app's merged assets, not the unit-test source set, so they go on the
+    // debug build type: visible to tests, absent from the release APK.
+    sourceSets {
+        getByName("debug").assets.srcDir("$projectDir/schemas")
+        getByName("androidTest").assets.srcDir("$projectDir/schemas")
     }
 
     signingConfigs {
@@ -209,6 +223,9 @@ dependencies {
     testImplementation("androidx.arch.core:core-testing:2.2.0")
     testImplementation("com.google.truth:truth:1.1.5")
     testImplementation("androidx.room:room-testing:$roomVersion")
+    // MigrationTestHelper needs InstrumentationRegistry, which Robolectric
+    // supplies for JVM unit tests.
+    testImplementation("androidx.test:core:1.5.0")
     testImplementation("io.kotest:kotest-assertions-core:5.8.0")
     testImplementation("org.robolectric:robolectric:4.11.1")
 

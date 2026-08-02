@@ -36,7 +36,6 @@ class OrientationControlService : Service() {
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val displayManager by lazy { getSystemService(DisplayManager::class.java) }
-    private val windowManager by lazy { getSystemService(WINDOW_SERVICE) as WindowManager }
 
     // Store overlay views per display ID
     private val overlayViews = mutableMapOf<Int, View>()
@@ -81,7 +80,11 @@ class OrientationControlService : Service() {
                                 ifLeft = { error ->
                                     Log.e(TAG, "Failed to set orientation: $error")
                                     showError(when (error) {
-                                        is OrientationError.PermissionDenied -> "Permission denied: ${error.permission}"
+                                        // The permission name is the system
+                                        // constant; name the toggle the user
+                                        // actually has to find in Settings.
+                                        is OrientationError.PermissionDenied ->
+                                            "Grant \"Display over other apps\" to control orientation"
                                         is OrientationError.DatabaseError -> "Error: ${error.message}"
                                         else -> "Failed to set orientation"
                                     })
@@ -160,7 +163,7 @@ class OrientationControlService : Service() {
             Log.d(TAG, "setOrientationWithOverlay: ${orientation.displayName} on display $displayId")
 
             // Check permission first
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
+            if (!Settings.canDrawOverlays(this)) {
                 Log.e(TAG, "SYSTEM_ALERT_WINDOW permission not granted!")
                 throw SecurityException("SYSTEM_ALERT_WINDOW permission required")
             }
@@ -182,7 +185,12 @@ class OrientationControlService : Service() {
             Log.i(TAG, "Successfully set orientation using overlay on display $displayId")
         }.mapLeft { e ->
             Log.e(TAG, "Exception in setOrientationWithOverlay", e)
-            OrientationError.DatabaseError("Failed to set orientation: ${e.message}")
+            when (e) {
+                is SecurityException ->
+                    OrientationError.PermissionDenied("SYSTEM_ALERT_WINDOW")
+                else ->
+                    OrientationError.DatabaseError("Failed to set orientation: ${e.message}")
+            }
         }
 
     private fun createAndShowOverlay(orientation: ScreenOrientation, displayId: Int) {
@@ -196,14 +204,16 @@ class OrientationControlService : Service() {
         }
 
         // Create a display-specific context
-        val displayContext = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1) {
-            createDisplayContext(display)
-        } else {
-            this
-        }
+        val displayContext = createDisplayContext(display)
 
-        // Get WindowManager for this specific display
-        val displayWindowManager = displayContext.getSystemService(WINDOW_SERVICE) as WindowManager
+        // Get WindowManager for this specific display. Returns null if the
+        // display went away between the lookup above and here, which is the
+        // normal case when an external screen is unplugged mid-operation.
+        val displayWindowManager = displayContext.getSystemService(WINDOW_SERVICE) as? WindowManager
+        if (displayWindowManager == null) {
+            Log.e(TAG, "No WindowManager for display $displayId; skipping overlay")
+            return
+        }
 
         // Create a minimal invisible view
         val view = View(displayContext)
@@ -213,12 +223,7 @@ class OrientationControlService : Service() {
         val layoutParams = WindowManager.LayoutParams(
             1, // width: 1 pixel (minimal)
             1, // height: 1 pixel (minimal)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-            } else {
-                @Suppress("DEPRECATION")
-                WindowManager.LayoutParams.TYPE_SYSTEM_OVERLAY
-            },
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                     WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
                     WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
@@ -258,14 +263,17 @@ class OrientationControlService : Service() {
 
                 // Get the display-specific context to get its WindowManager
                 val display = displayManager.displays.find { it.displayId == displayId }
-                val displayContext = if (display != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1) {
+                val displayContext = if (display != null) {
                     createDisplayContext(display)
                 } else {
                     this
                 }
-                val displayWindowManager = displayContext.getSystemService(WINDOW_SERVICE) as WindowManager
+                val displayWindowManager =
+                    displayContext.getSystemService(WINDOW_SERVICE) as? WindowManager
 
-                displayWindowManager.removeView(view)
+                // A disconnected display takes its windows with it, so a null
+                // WindowManager means there is nothing left to remove.
+                displayWindowManager?.removeView(view)
                 overlayViews.remove(displayId)
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to remove overlay view from display $displayId", e)
@@ -305,8 +313,9 @@ class OrientationControlService : Service() {
             Log.d(TAG, "flashScreen: displayId=$displayId, screenName=$screenName, orientation=$orientation")
 
             // Check permission first
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
+            if (!Settings.canDrawOverlays(this)) {
                 Log.e(TAG, "SYSTEM_ALERT_WINDOW permission not granted!")
+                showError("Grant \"Display over other apps\" to identify screens")
                 return
             }
 
@@ -314,18 +323,21 @@ class OrientationControlService : Service() {
             val display = displayManager.displays.find { it.displayId == displayId }
             if (display == null) {
                 Log.e(TAG, "Display $displayId not found")
+                showError("Screen no longer connected")
                 return
             }
 
             // Create a display-specific context
-            val displayContext = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1) {
-                createDisplayContext(display)
-            } else {
-                this
-            }
+            val displayContext = createDisplayContext(display)
 
             // Get WindowManager for this specific display
-            val displayWindowManager = displayContext.getSystemService(WINDOW_SERVICE) as WindowManager
+            val displayWindowManager =
+                displayContext.getSystemService(WINDOW_SERVICE) as? WindowManager
+            if (displayWindowManager == null) {
+                Log.e(TAG, "No WindowManager for display $displayId; skipping flash")
+                showError("Screen no longer connected")
+                return
+            }
 
             // Create custom flash view with diagonal stripes
             val flashView = object : View(displayContext) {
@@ -333,6 +345,9 @@ class OrientationControlService : Service() {
                     style = android.graphics.Paint.Style.FILL
                     isAntiAlias = false // Pixel-perfect for retro look
                 }
+
+                // Preallocated: onDraw reuses this for every stripe.
+                private val stripePath = android.graphics.Path()
 
                 private val textPaint = android.graphics.Paint().apply {
                     color = textColor
@@ -359,15 +374,16 @@ class OrientationControlService : Service() {
                         paint.color = colors[i % colors.size]
                         val offset = i * stripeWidth - diagonal / 2
 
-                        // Draw diagonal stripe from bottom-left to top-right
-                        val path = android.graphics.Path().apply {
-                            moveTo(offset, height)
-                            lineTo(offset + stripeWidth, height)
-                            lineTo(offset + stripeWidth + height, 0f)
-                            lineTo(offset + height, 0f)
-                            close()
-                        }
-                        canvas.drawPath(path, paint)
+                        // Draw diagonal stripe from bottom-left to top-right.
+                        // Reuses one Path: allocating per stripe per frame
+                        // churns the heap during the flash animation.
+                        stripePath.rewind()
+                        stripePath.moveTo(offset, height)
+                        stripePath.lineTo(offset + stripeWidth, height)
+                        stripePath.lineTo(offset + stripeWidth + height, 0f)
+                        stripePath.lineTo(offset + height, 0f)
+                        stripePath.close()
+                        canvas.drawPath(stripePath, paint)
                     }
 
                     // Draw semi-transparent overlay for text readability
@@ -407,12 +423,7 @@ class OrientationControlService : Service() {
             val layoutParams = WindowManager.LayoutParams(
                 WindowManager.LayoutParams.MATCH_PARENT,
                 WindowManager.LayoutParams.MATCH_PARENT,
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-                } else {
-                    @Suppress("DEPRECATION")
-                    WindowManager.LayoutParams.TYPE_SYSTEM_OVERLAY
-                },
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                         WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
                         WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
@@ -447,6 +458,7 @@ class OrientationControlService : Service() {
             }
         }.mapLeft { e ->
             Log.e(TAG, "Exception in flashScreen", e)
+            showError("Could not identify screen: ${e.message ?: "unknown error"}")
         }
     }
 

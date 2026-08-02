@@ -6,7 +6,6 @@ import android.content.Intent
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.hardware.display.DisplayManager
-import android.os.Build
 import android.os.IBinder
 import android.provider.Settings
 import android.util.Log
@@ -54,7 +53,6 @@ class OrientationSelectorOverlayService : Service() {
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val displayManager by lazy { getSystemService(DisplayManager::class.java) }
-    private val windowManager by lazy { getSystemService(WINDOW_SERVICE) as WindowManager }
     private lateinit var repository: OrientationRepository
 
     // Store overlay views per display ID
@@ -119,7 +117,7 @@ class OrientationSelectorOverlayService : Service() {
 
     private fun showSelectorOverlay(packageName: String, appName: String, displayIds: List<Int>) {
         // Check permission first
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
+        if (!Settings.canDrawOverlays(this)) {
             Log.e(TAG, "SYSTEM_ALERT_WINDOW permission not granted!")
             android.widget.Toast.makeText(
                 this,
@@ -184,13 +182,14 @@ class OrientationSelectorOverlayService : Service() {
             }
 
             // Create display-specific context
-            val displayContext = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1) {
-                createDisplayContext(display)
-            } else {
-                this
-            }
+            val displayContext = createDisplayContext(display)
 
-            val displayWindowManager = displayContext.getSystemService(WINDOW_SERVICE) as WindowManager
+            val displayWindowManager =
+                displayContext.getSystemService(WINDOW_SERVICE) as? WindowManager
+            if (displayWindowManager == null) {
+                Log.e(TAG, "No WindowManager for display $displayId; skipping overlay")
+                return
+            }
 
             Log.d(TAG, "Creating ComposeView for display $displayId")
 
@@ -222,12 +221,7 @@ class OrientationSelectorOverlayService : Service() {
             val layoutParams = WindowManager.LayoutParams(
                 WindowManager.LayoutParams.MATCH_PARENT,
                 WindowManager.LayoutParams.MATCH_PARENT,
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-                } else {
-                    @Suppress("DEPRECATION")
-                    WindowManager.LayoutParams.TYPE_SYSTEM_OVERLAY
-                },
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                         WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
                 PixelFormat.TRANSLUCENT
@@ -302,13 +296,15 @@ class OrientationSelectorOverlayService : Service() {
         overlayViews.forEach { (displayId, view) ->
             try {
                 val display = displayManager.displays.find { it.displayId == displayId }
-                val displayContext = if (display != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1) {
+                val displayContext = if (display != null) {
                     createDisplayContext(display)
                 } else {
                     this
                 }
-                val displayWindowManager = displayContext.getSystemService(WINDOW_SERVICE) as WindowManager
-                displayWindowManager.removeView(view)
+                val displayWindowManager =
+                    displayContext.getSystemService(WINDOW_SERVICE) as? WindowManager
+                // Null means the display is gone and took its windows with it.
+                displayWindowManager?.removeView(view)
                 Log.d(TAG, "Removed overlay from display $displayId")
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to remove overlay from display $displayId", e)

@@ -1,7 +1,6 @@
 package app.rotatescreen.util
 
 import android.content.Context
-import android.os.Build
 import android.provider.Settings
 import arrow.core.Either
 import arrow.core.left
@@ -30,11 +29,7 @@ object PermissionChecker {
 
     fun hasDrawOverlayPermission(context: Context): Either<OrientationError, Boolean> =
         Either.catch {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                Settings.canDrawOverlays(context)
-            } else {
-                true // Permission not required on pre-M devices
-            }
+            Settings.canDrawOverlays(context)
         }.mapLeft {
             OrientationError.PermissionDenied("SYSTEM_ALERT_WINDOW")
         }

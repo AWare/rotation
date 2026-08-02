@@ -30,7 +30,7 @@ import kotlinx.coroutines.launch
  */
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val context: Context = application.applicationContext
+    private val context: Context get() = getApplication<Application>().applicationContext
     private val repository: OrientationRepository
     private val preferencesManager: PreferencesManager
     private val displayManager: DisplayManager by lazy {
@@ -229,25 +229,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val packageManager = context.packageManager
 
             // Get recently used apps
-            val recentApps = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1) {
-                try {
-                    val service = context.getSystemService(Context.USAGE_STATS_SERVICE)
-                    if (service is android.app.usage.UsageStatsManager) {
-                        val endTime = System.currentTimeMillis()
-                        val startTime = endTime - 1000 * 60 * 60 * 24 * 7 // Last 7 days
+            val recentApps = try {
+                val service = context.getSystemService(Context.USAGE_STATS_SERVICE)
+                if (service is android.app.usage.UsageStatsManager) {
+                    val endTime = System.currentTimeMillis()
+                    val startTime = endTime - 1000 * 60 * 60 * 24 * 7 // Last 7 days
 
-                        service.queryUsageStats(
-                            android.app.usage.UsageStatsManager.INTERVAL_WEEKLY,
-                            startTime,
-                            endTime
-                        )?.mapNotNull { it.packageName }?.toSet() ?: emptySet()
-                    } else {
-                        emptySet()
-                    }
-                } catch (e: Exception) {
+                    service.queryUsageStats(
+                        android.app.usage.UsageStatsManager.INTERVAL_WEEKLY,
+                        startTime,
+                        endTime
+                    )?.mapNotNull { it.packageName }?.toSet() ?: emptySet()
+                } else {
                     emptySet()
                 }
-            } else {
+            } catch (e: Exception) {
                 emptySet()
             }
 
@@ -519,10 +515,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      * FP: Pure function that returns immutable set
      */
     private fun getRunningApps(): Set<String> {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP_MR1) {
-            return emptySet()
-        }
-
         return try {
             val usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE)
                 as? android.app.usage.UsageStatsManager
@@ -558,10 +550,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      * Returns null if no app is detected or permission is missing
      */
     fun getCurrentForegroundApp(): String? {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP_MR1) {
-            return null
-        }
-
         return try {
             val usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE)
                 as? android.app.usage.UsageStatsManager
@@ -612,9 +600,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun hasUsageStatsPermission(): Boolean {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP_MR1) {
-            return false
-        }
         val service = context.getSystemService(Context.USAGE_STATS_SERVICE)
         if (service is android.app.usage.UsageStatsManager) {
             val endTime = System.currentTimeMillis()
