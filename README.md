@@ -26,10 +26,10 @@ The app is built using modern Android development practices and functional progr
 
 ### Tech Stack
 
-- **Kotlin 1.9.21** with functional programming patterns
-- **Arrow 1.2.1** for FP types (Either, Option)
+- **Kotlin 2.3.10** with functional programming patterns
+- **Arrow 2.2.3** for FP types (Either, Option)
 - **Jetpack Compose** with Material 3
-- **Room 2.6.1** for database
+- **Room 2.8.4** for database (schemas exported and migration-tested)
 - **DataStore** for preferences
 - **MVVM** with reactive StateFlow
 
@@ -37,7 +37,7 @@ The app is built using modern Android development practices and functional progr
 
 ```
 app/src/
-├── main/java/com/aware/rotation/
+├── main/java/app/rotatescreen/
 │   ├── domain/model/           # FP domain models (immutable)
 │   ├── data/
 │   │   ├── local/              # Room database
@@ -134,7 +134,7 @@ Or download from [GitHub Releases](../../releases)
 
 ### GitHub Actions
 
-**Build & Test** (on push to `main`/`claude/**` and on PRs):
+**Build & Test** (on push to any branch, and on fork PRs):
 - Runs unit tests, lint and a debug APK build
 - Any of those failing fails the job
 - Uploads test/lint reports and the debug APK
@@ -217,16 +217,27 @@ Never use that flag for anything you intend to distribute.
 ## Database Schema
 
 ```kotlin
-@Entity(tableName = "app_orientations")
+@Entity(
+    tableName = "app_orientations",
+    primaryKeys = ["packageName", "targetScreenId"]  // one row per app per screen
+)
 data class AppOrientationEntity(
-    @PrimaryKey val packageName: String,
+    val packageName: String,
+    val targetScreenId: Int,
     val appName: String,
     val orientationValue: Int,
-    val targetScreenId: Int,
     val targetScreenName: String,
-    val enabled: Boolean,
-    val lastModified: Long
+    val aspectRatioValue: String = "LANDSCAPE",
+    val enabled: Boolean = true,
+    val lastModified: Long = System.currentTimeMillis()
 )
+```
+
+Schemas are exported to `app/schemas` and committed. Bumping the version without
+adding a `Migration` fails `RotationDatabaseMigrationTest` — the database no
+longer falls back to destroying user data.
+
+```kotlin
 ```
 
 ## Building
@@ -241,9 +252,8 @@ data class AppOrientationEntity(
 
 ### Local toolchain
 
-The build needs JDK 17 and the Android SDK (platform 34, build-tools 34.0.0).
-Neither has to come from Android Studio; a headless setup is enough to run
-everything CI runs:
+The build needs JDK 17 and the Android SDK. Neither has to come from Android
+Studio; a headless setup runs everything CI runs:
 
 ```bash
 # JDK 17
@@ -251,10 +261,12 @@ mkdir -p ~/.jdks/temurin-17
 curl -fSL "https://api.adoptium.net/v3/binary/latest/17/ga/linux/x64/jdk/hotspot/normal/eclipse" \
   | tar -xz -C ~/.jdks/temurin-17 --strip-components=1
 
-# Android SDK command-line tools
+# Android SDK command-line tools (rev 22). An older cmdline-tools cannot parse
+# the current SDK index -- it reports "only understands SDK XML versions up to
+# 3" and then fails to find any recent platform.
 mkdir -p ~/Android/Sdk/cmdline-tools
 curl -fSLo /tmp/cmdline-tools.zip \
-  "https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip"
+  "https://dl.google.com/android/repository/commandlinetools-linux-15859902_latest.zip"
 unzip -q /tmp/cmdline-tools.zip -d ~/Android/Sdk/cmdline-tools
 mv ~/Android/Sdk/cmdline-tools/cmdline-tools ~/Android/Sdk/cmdline-tools/latest
 
@@ -263,8 +275,17 @@ export ANDROID_HOME="$HOME/Android/Sdk"
 export PATH="$JAVA_HOME/bin:$ANDROID_HOME/cmdline-tools/latest/bin:$PATH"
 
 yes | sdkmanager --licenses
-sdkmanager --install "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+sdkmanager --install "platform-tools" "platforms;android-37.0" "build-tools;37.0.0"
 ```
+
+Note the platform id is `android-37.0`, not `android-37` — recent SDK packages
+carry a minor version. To keep cmdline-tools current later, run
+`sdkmanager --install "cmdline-tools;latest"`; it installs alongside as
+`latest-2`, so move it over `latest` yourself.
+
+`sdkmanager` still works but is deprecated in favour of `android sdk`, which
+prompts to accept terms interactively and enables usage metrics unless you pass
+`--no-metrics`.
 
 Gradle finds the SDK through `ANDROID_HOME`, so no `local.properties` is needed.
 

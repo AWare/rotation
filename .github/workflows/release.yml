@@ -111,7 +111,7 @@ jobs:
 
             **Version:** ${{ steps.version.outputs.versionName }} (build ${{ steps.version.outputs.versionCode }})
             **Minimum Android:** 10 (API 29)
-            **Target Android:** 14 (API 34)
+            **Target Android:** 17 (API 37)
           files: app/build/outputs/apk/release/*.apk
           fail_on_unmatched_files: true
           draft: false

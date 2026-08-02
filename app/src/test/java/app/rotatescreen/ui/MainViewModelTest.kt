@@ -116,7 +116,7 @@ class MainViewModelTest {
         every { packageManager.queryIntentActivities(any(), any<PackageManager.ResolveInfoFlags>()) } returns launcherApps
 
         // Act
-        val viewModel = MainViewModel(application)
+        val viewModel = MainViewModel(application, testDispatcher)
         testScheduler.advanceUntilIdle()
 
         // Assert
@@ -141,7 +141,7 @@ class MainViewModelTest {
         every { packageManager.getApplicationInfo("com.example.corrupted", 0) } throws Exception("App corrupted")
 
         // Act
-        val viewModel = MainViewModel(application)
+        val viewModel = MainViewModel(application, testDispatcher)
         testScheduler.advanceUntilIdle()
 
         // Assert
@@ -163,7 +163,7 @@ class MainViewModelTest {
 
         every { packageManager.queryIntentActivities(any(), any<PackageManager.ResolveInfoFlags>()) } returns launcherApps
 
-        val viewModel = MainViewModel(application)
+        val viewModel = MainViewModel(application, testDispatcher)
         testScheduler.advanceUntilIdle()
 
         // Act
@@ -208,7 +208,7 @@ class MainViewModelTest {
         every { dao.getAll() } returns flowOf(savedSettings.map { it.toEntity() })
 
         // Act
-        val viewModel = MainViewModel(application)
+        val viewModel = MainViewModel(application, testDispatcher)
         testScheduler.advanceUntilIdle()
 
         // Assert
@@ -234,7 +234,7 @@ class MainViewModelTest {
         every { packageManager.queryIntentActivities(any(), any<PackageManager.ResolveInfoFlags>()) } returns launcherApps
         coEvery { dao.insert(any()) } just Runs
 
-        val viewModel = MainViewModel(application)
+        val viewModel = MainViewModel(application, testDispatcher)
         testScheduler.advanceUntilIdle()
 
         // Act
@@ -255,7 +255,7 @@ class MainViewModelTest {
         every { packageManager.queryIntentActivities(any(), any<PackageManager.ResolveInfoFlags>()) } returns launcherApps
         coEvery { dao.delete(any()) } just Runs
 
-        val viewModel = MainViewModel(application)
+        val viewModel = MainViewModel(application, testDispatcher)
         testScheduler.advanceUntilIdle()
 
         // Act
@@ -278,7 +278,7 @@ class MainViewModelTest {
         every { packageManager.queryIntentActivities(any(), any<PackageManager.ResolveInfoFlags>()) } returns launcherApps
 
         // Act
-        val viewModel = MainViewModel(application)
+        val viewModel = MainViewModel(application, testDispatcher)
         testScheduler.advanceUntilIdle()
 
         // Assert
@@ -299,7 +299,7 @@ class MainViewModelTest {
         every { packageManager.queryIntentActivities(any(), any<PackageManager.ResolveInfoFlags>()) } returns launcherApps
 
         // Act - Should not throw NoSuchElementException
-        val viewModel = MainViewModel(application)
+        val viewModel = MainViewModel(application, testDispatcher)
         testScheduler.advanceUntilIdle()
 
         // Assert
@@ -315,7 +315,7 @@ class MainViewModelTest {
         every { context.getSystemService(Context.DISPLAY_SERVICE) } returns displayManager
 
         // Act - Should not throw ClassCastException
-        val viewModel = MainViewModel(application)
+        val viewModel = MainViewModel(application, testDispatcher)
         testScheduler.advanceUntilIdle()
 
         // Assert
@@ -331,7 +331,7 @@ class MainViewModelTest {
         every { context.startService(any()) } throws SecurityException("No permission")
         coEvery { anyConstructed<PreferencesManager>().setGlobalOrientation(any()) } returns Either.Right(Unit)
 
-        val viewModel = MainViewModel(application)
+        val viewModel = MainViewModel(application, testDispatcher)
         testScheduler.advanceUntilIdle()
 
         // Act - Should not crash
@@ -347,7 +347,7 @@ class MainViewModelTest {
         // Arrange
         every { context.startService(any()) } throws SecurityException("No permission")
 
-        val viewModel = MainViewModel(application)
+        val viewModel = MainViewModel(application, testDispatcher)
         testScheduler.advanceUntilIdle()
 
         // Act - Should not crash
@@ -360,7 +360,7 @@ class MainViewModelTest {
 
     @Test
     fun `initial state has default values`() = runTest {
-        val viewModel = MainViewModel(application)
+        val viewModel = MainViewModel(application, testDispatcher)
         testScheduler.advanceUntilIdle()
 
         val state = viewModel.state.value
@@ -372,7 +372,7 @@ class MainViewModelTest {
 
     @Test
     fun `updateSearchQuery updates search query flow`() = runTest {
-        val viewModel = MainViewModel(application)
+        val viewModel = MainViewModel(application, testDispatcher)
         testScheduler.advanceUntilIdle()
 
         viewModel.updateSearchQuery("test")
@@ -383,7 +383,7 @@ class MainViewModelTest {
 
     @Test
     fun `checkPermissions updates permission states`() = runTest {
-        val viewModel = MainViewModel(application)
+        val viewModel = MainViewModel(application, testDispatcher)
         testScheduler.advanceUntilIdle()
 
         viewModel.checkPermissions()
@@ -412,7 +412,7 @@ class MainViewModelTest {
         every { packageManager.queryIntentActivities(any(), any<PackageManager.ResolveInfoFlags>()) } returns launcherApps
 
         // Act
-        val viewModel = MainViewModel(application)
+        val viewModel = MainViewModel(application, testDispatcher)
         testScheduler.advanceUntilIdle()
 
         // Assert - Verify queryIntentActivities called with correct flags
@@ -452,7 +452,7 @@ class MainViewModelTest {
         every { packageManager.queryIntentActivities(any(), any<PackageManager.ResolveInfoFlags>()) } returns launcherApps
 
         // Act
-        val viewModel = MainViewModel(application)
+        val viewModel = MainViewModel(application, testDispatcher)
         testScheduler.advanceUntilIdle()
 
         // Assert - All apps should be included
