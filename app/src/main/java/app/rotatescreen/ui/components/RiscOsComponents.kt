@@ -163,7 +163,37 @@ data class RiscOsPalette(
             actionYellow = Color(0xFFFFFF00)
         )
 
-        val All = listOf(Classic, Aqua, Sand, Dark, NGEUnit01, NGEUnit00, NGEUnit02, NGETerminal)
+        /**
+         * High-contrast monochrome for e-ink displays.
+         *
+         * E-ink renders colour as luminance across roughly 16 grey levels, so
+         * hue carries no information at all. In the other palettes that is
+         * fatal: Classic's actionGreen sits at 1.04:1 against its background
+         * and lands on an adjacent grey level, making it invisible.
+         *
+         * Every action colour here is near-black and legible. They deliberately
+         * do NOT differ meaningfully -- keeping four shades apart *and* above
+         * 4.5:1 on white is not possible, so meaning is left to the glyphs and
+         * labels the UI already uses rather than to colour.
+         */
+        val EInk = RiscOsPalette(
+            name = "E-Ink",
+            background = Color(0xFFFFFFFF),
+            lightGray = Color(0xFFF2F2F2),
+            mediumGray = Color(0xFFD6D6D6),
+            darkGray = Color(0xFF595959),      // 7.0:1 on white
+            veryDarkGray = Color(0xFF1A1A1A),
+            white = Color(0xFFFFFFFF),
+            black = Color(0xFF000000),
+            actionBlue = Color(0xFF000000),
+            actionGreen = Color(0xFF262626),
+            actionRed = Color(0xFF0D0D0D),
+            actionYellow = Color(0xFF404040)
+        )
+
+        val All = listOf(Classic, Aqua, Sand, Dark, NGEUnit01, NGEUnit00, NGEUnit02, NGETerminal, EInk)
+
+        fun byName(name: String): RiscOsPalette? = All.find { it.name == name }
     }
 }
 
@@ -219,6 +249,12 @@ fun MottledBackground(
         modifier = modifier
             .background(baseColor)
             .drawBehind {
+                // The stipple is a +/-0.03 brightness dither. On e-ink's ~16
+                // grey levels that either quantises away to nothing or turns
+                // into visible noise that provokes a full-screen refresh --
+                // and it costs ~17k rects per frame either way.
+                if (RiscOsColors.currentPalette == RiscOsPalette.EInk) return@drawBehind
+
                 val width = size.width.toInt()
                 val height = size.height.toInt()
                 val seed = 42
