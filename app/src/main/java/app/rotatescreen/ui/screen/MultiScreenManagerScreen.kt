@@ -94,7 +94,11 @@ fun MultiScreenManagerScreen(
             }
 
             // Show current foreground app
-            if (currentForegroundPackage != null && currentForegroundApp != null) {
+            // Bound to locals so the values cannot become null between
+            // composition and a button click inside this block.
+            val foregroundPackage = currentForegroundPackage
+            val foregroundApp = currentForegroundApp
+            if (foregroundPackage != null && foregroundApp != null) {
                 RiscOsWindow(
                     title = "▶ Current Foreground App",
                     modifier = Modifier.fillMaxWidth()
@@ -103,12 +107,12 @@ fun MultiScreenManagerScreen(
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         RiscOsLabel(
-                            text = currentForegroundApp!!,
+                            text = foregroundApp,
                             fontWeight = FontWeight.Bold,
                             color = RiscOsColors.actionGreen
                         )
                         RiscOsLabel(
-                            text = currentForegroundPackage!!,
+                            text = foregroundPackage,
                             color = RiscOsColors.darkGray
                         )
 
@@ -142,10 +146,10 @@ fun MultiScreenManagerScreen(
                                 specificScreens.forEach { screen ->
                                     RiscOsButton(
                                         onClick = {
-                                            viewModel.setAppTargetScreen(currentForegroundPackage!!, screen)
+                                            viewModel.setAppTargetScreen(foregroundPackage, screen)
                                             viewModel.setAppOrientation(
-                                                currentForegroundPackage!!,
-                                                currentForegroundApp!!,
+                                                foregroundPackage,
+                                                foregroundApp,
                                                 ScreenOrientation.Sensor
                                             )
                                         },
