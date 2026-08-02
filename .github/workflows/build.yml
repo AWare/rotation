@@ -2,9 +2,10 @@ name: Build and Test
 
 on:
   push:
-    branches: [ main, 'claude/**' ]
+    # Every branch, not a hand-maintained list. '**' matches branches only, so
+    # tag pushes do not double-build.
+    branches: [ '**' ]
   pull_request:
-    branches: [ main ]
 
 # A newer push to the same ref makes an in-flight run irrelevant.
 concurrency:
@@ -26,6 +27,13 @@ jobs:
   check:
     name: Test, lint and build
     runs-on: ubuntu-latest
+    # A push already covers same-repo branches; this stops same-repo PRs
+    # building the identical commit twice while still covering fork PRs.
+    if: >-
+      github.event_name == 'push' ||
+      github.event.pull_request.head.repo.full_name != github.repository
+    # Without this a wedged build occupies a runner for six hours.
+    timeout-minutes: 30
 
     steps:
       - name: Checkout code
@@ -42,6 +50,17 @@ jobs:
         with:
           # Refuses to run if gradle-wrapper.jar is not a known-good release.
           validate-wrappers: true
+
+      # Robolectric downloads its android-all runtimes into ~/.m2 at *test*
+      # time, which setup-gradle does not cache. Without this every run pulls
+      # ~300MB from Maven mid-test, which is both slow and a live network
+      # dependency in the middle of the test phase.
+      - name: Cache Robolectric runtimes
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository/org/robolectric
+          key: robolectric-${{ runner.os }}-${{ hashFiles('app/build.gradle.kts') }}
+          restore-keys: robolectric-${{ runner.os }}-
 
       # Each of these fails the job on its own. They are separate steps so the
       # Actions UI names the stage that broke rather than one opaque "gradle".
