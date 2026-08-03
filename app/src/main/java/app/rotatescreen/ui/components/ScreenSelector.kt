@@ -10,7 +10,7 @@ import app.rotatescreen.domain.model.AspectRatio
 import app.rotatescreen.domain.model.TargetScreen
 
 /**
- * RISC OS style display/screen selector
+ * Adaptive Display Selector - Visualizes dual-screen setups (AYN Thor Screen 1 vs Screen 2)
  */
 @Composable
 fun ScreenSelector(
@@ -24,20 +24,21 @@ fun ScreenSelector(
         return
     }
 
-    Column(modifier = modifier) {
-        RiscOsLabel(
-            text = "Target Display:",
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(bottom = 8.dp)
-        )
-
+    TactileCard(
+        title = "Target Display",
+        subtitle = "AYN Thor / Multi-Screen Display Mapping",
+        statusBadge = "${availableScreens.size} Displays",
+        statusColor = RiscOsColors.actionGreen,
+        modifier = modifier
+    ) {
         Row(
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
-            availableScreens.forEach { screen ->
-                ScreenButton(
+            availableScreens.forEachIndexed { index, screen ->
+                ScreenTile(
                     screen = screen,
+                    index = index,
                     isSelected = selectedScreen.id == screen.id,
                     onClick = { onScreenSelected(screen) },
                     onFlash = onScreenFlash,
@@ -49,57 +50,53 @@ fun ScreenSelector(
 }
 
 @Composable
-private fun ScreenButton(
+private fun ScreenTile(
     screen: TargetScreen,
+    index: Int,
     isSelected: Boolean,
     onClick: () -> Unit,
     onFlash: ((TargetScreen) -> Unit)?,
     modifier: Modifier = Modifier
 ) {
-    RiscOsButton(
+    TactileButton(
         onClick = {
-            android.util.Log.d("ScreenSelector", "ScreenButton clicked: ${screen.displayName} (id=${screen.id}), isSelected=$isSelected")
             onClick()
-            android.util.Log.d("ScreenSelector", "onClick callback executed")
-            // Flash the screen when clicked
             if (screen !is TargetScreen.AllScreens) {
-                android.util.Log.d("ScreenSelector", "Flashing screen: ${screen.displayName}")
                 onFlash?.invoke(screen)
             }
         },
         isSelected = isSelected,
-        modifier = modifier.height(40.dp),
-        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
-        backgroundColor = if (screen is TargetScreen.AllScreens)
-            RiscOsColors.actionGreen.copy(alpha = 0.3f)
-        else
-            RiscOsColors.lightGray
+        modifier = modifier.height(48.dp),
+        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp)
     ) {
         Row(
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.fillMaxWidth()
         ) {
-            // Icon symbol - aspect ratio aware with distinct shapes
             val icon = when (screen) {
-                is TargetScreen.AllScreens -> "⊞"
-                is TargetScreen.SpecificScreen -> when (screen.ratio) {
-                    AspectRatio.PORTRAIT -> "▯"     // Tall rectangle (portrait)
-                    AspectRatio.LANDSCAPE -> "▬"    // Very wide rectangle (widescreen)
-                    AspectRatio.SQUARE -> "▪"       // Small square (nearly square display)
+                is TargetScreen.AllScreens -> "[ALL]"
+                is TargetScreen.SpecificScreen -> when (index) {
+                    0 -> "[SCR 1]" // Top Screen on Thor
+                    1 -> "[SCR 2]" // Bottom Screen on Thor
+                    else -> "[SCR ${index + 1}]"
                 }
             }
 
-            RiscOsLabel(
+            TactileLabel(
                 text = icon,
+                isSelected = isSelected,
                 fontWeight = FontWeight.Bold,
-                color = RiscOsColors.white
+                fontSize = 11f
             )
-            Spacer(modifier = Modifier.width(4.dp))
-            RiscOsLabel(
+
+            Spacer(modifier = Modifier.width(6.dp))
+
+            TactileLabel(
                 text = screen.displayName,
+                isSelected = isSelected,
                 maxLines = 1,
-                color = RiscOsColors.white
+                fontSize = 12f
             )
         }
     }
