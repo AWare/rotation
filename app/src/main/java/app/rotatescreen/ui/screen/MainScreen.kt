@@ -1,6 +1,8 @@
 package app.rotatescreen.ui.screen
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -8,6 +10,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -17,8 +21,8 @@ import app.rotatescreen.ui.components.*
 
 /**
  * Adaptive Tactile Deck Main Screen
- * Optimized for dual-screen AYN Thor handhelds (D-pad focus + multi-display target)
- * and Boox E-Ink readers (direct 1-tap orientation grid + 100% contrast).
+ * Optimized for dual-screen AYN Thor handhelds and Boox E-Ink readers.
+ * Features status bar safe insets, multi-display auto-detection, and a clean dropdown menu for secondary functions.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -33,6 +37,11 @@ fun MainScreen(
     val selectedGlobalScreen by viewModel.selectedGlobalScreen.collectAsState()
 
     val isEInk = RiscOsColors.currentPalette == RiscOsPalette.EInk
+    var showMenu by remember { mutableStateOf(false) }
+    var showMoreOptions by remember { mutableStateOf(false) }
+
+    // Multi-display is only relevant if device actually has more than 1 display
+    val isMultiDisplayDevice = availableScreens.size > 1
 
     MottledBackground(
         modifier = Modifier.fillMaxSize()
@@ -40,15 +49,17 @@ fun MainScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(10.dp),
+                .statusBarsPadding() // Generous status bar breathing space
+                .padding(top = 12.dp, start = 10.dp, end = 10.dp, bottom = 10.dp)
+                .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            // Tactile Deck Top Bar
+            // Tactile Deck Top Bar with status bar breathing space & Menu trigger
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(if (isEInk) RiscOsColors.black else RiscOsColors.actionBlue)
+                    .border(width = 1.dp, color = if (isEInk) RiscOsColors.white else Color.Transparent, shape = RectangleShape)
                     .padding(horizontal = 12.dp, vertical = 10.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
@@ -63,18 +74,92 @@ fun MainScreen(
                         letterSpacing = 1.sp
                     )
                     Text(
-                        text = "AYN THOR & BOOX E-INK DECK",
-                        color = RiscOsColors.white.copy(alpha = 0.8f),
+                        text = if (isMultiDisplayDevice) "THOR DUAL DISPLAY DECK" else "E-INK & TACTILE DECK",
+                        color = RiscOsColors.white.copy(alpha = 0.85f),
                         fontFamily = FontFamily.Monospace,
                         fontSize = 10.sp
                     )
                 }
 
-                TactileBadge(
-                    text = RiscOsColors.currentPalette.name.uppercase(),
-                    backgroundColor = if (isEInk) RiscOsColors.white else RiscOsColors.actionGreen,
-                    textColor = if (isEInk) RiscOsColors.black else RiscOsColors.white
-                )
+                Box {
+                    // Menu Action Button (replaces lozenge badge with interactive sharp menu trigger)
+                    TactileButton(
+                        onClick = { showMenu = !showMenu },
+                        isSelected = showMenu,
+                        backgroundColor = if (isEInk) RiscOsColors.white else RiscOsColors.actionGreen,
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                    ) {
+                        TactileLabel(
+                            text = "MENU ▾",
+                            fontWeight = FontWeight.Bold,
+                            color = if (isEInk && !showMenu) RiscOsColors.black else RiscOsColors.white,
+                            fontSize = 11f
+                        )
+                    }
+
+                    // Dropdown menu for secondary functions
+                    DropdownMenu(
+                        expanded = showMenu,
+                        onDismissRequest = { showMenu = false },
+                        modifier = Modifier
+                            .background(if (isEInk) RiscOsColors.white else RiscOsColors.lightGray)
+                            .border(width = 1.5.dp, color = RiscOsColors.black, shape = RectangleShape)
+                    ) {
+                        DropdownMenuItem(
+                            text = {
+                                TactileLabel(
+                                    text = "⚡ CONFIGURE PER-APP RULES",
+                                    fontWeight = FontWeight.Bold
+                                )
+                            },
+                            onClick = {
+                                showMenu = false
+                                onNavigateToPerApp()
+                            }
+                        )
+
+                        // Multi-display manager option is ONLY shown if device actually has multiple displays
+                        if (isMultiDisplayDevice) {
+                            DropdownMenuItem(
+                                text = {
+                                    TactileLabel(
+                                        text = "🖥 MULTI-DISPLAY MANAGER",
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                },
+                                onClick = {
+                                    showMenu = false
+                                    onNavigateToMultiScreenManager()
+                                }
+                            )
+                        }
+
+                        DropdownMenuItem(
+                            text = {
+                                TactileLabel(
+                                    text = "🎨 PALETTE: ${RiscOsColors.currentPalette.name}",
+                                    fontWeight = FontWeight.Bold
+                                )
+                            },
+                            onClick = {
+                                viewModel.cyclePalette()
+                            }
+                        )
+
+                        DropdownMenuItem(
+                            text = {
+                                TactileLabel(
+                                    text = "🔍 DIAGNOSTICS & LOGS",
+                                    fontWeight = FontWeight.Bold
+                                )
+                            },
+                            onClick = {
+                                showMenu = false
+                                onNavigateToLogs()
+                            }
+                        )
+                    }
+                }
             }
 
             // Permission warnings
@@ -98,8 +183,8 @@ fun MainScreen(
                 }
             }
 
-            // Screen selector for dual-screen setups (AYN Thor Screen 1 vs Screen 2)
-            if (availableScreens.size > 1) {
+            // Target Display selector: Only displayed if device has multiple displays (e.g. AYN Thor)
+            if (isMultiDisplayDevice) {
                 ScreenSelector(
                     availableScreens = availableScreens,
                     selectedScreen = selectedGlobalScreen,
@@ -110,18 +195,18 @@ fun MainScreen(
                 )
             }
 
-            // Global Orientation direct-action grid
+            // Primary Orientation Control (Direct Action Grid)
             OrientationSelector(
                 selectedOrientation = state.globalOrientation,
                 onOrientationSelected = { viewModel.setGlobalOrientation(it) },
                 modifier = Modifier.fillMaxWidth()
             )
 
-            // Per-app rules card
+            // Primary Per-App Action Card
             TactileCard(
                 title = "Per-App Rules",
-                subtitle = "Set different orientations for individual apps",
-                statusBadge = if (state.perAppSettings.isNotEmpty()) "${state.perAppSettings.size} Configured" else "None",
+                subtitle = "Apply automatic orientation per application",
+                statusBadge = if (state.perAppSettings.isNotEmpty()) "${state.perAppSettings.size} Rules" else "Standard",
                 statusColor = RiscOsColors.actionGreen,
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -137,68 +222,79 @@ fun MainScreen(
                 }
             }
 
-            // Multi-Screen Manager card
-            TactileCard(
-                title = "Multi-Screen Manager",
-                subtitle = "Manage & target apps across dual displays",
-                statusBadge = "Thor Dual View",
-                statusColor = RiscOsColors.actionBlue,
-                modifier = Modifier.fillMaxWidth()
+            // Secondary functions drawer toggle
+            TactileButton(
+                onClick = { showMoreOptions = !showMoreOptions },
+                isSelected = showMoreOptions,
+                modifier = Modifier.fillMaxWidth(),
+                backgroundColor = RiscOsColors.lightGray
             ) {
-                TactileButton(
-                    onClick = onNavigateToMultiScreenManager,
-                    modifier = Modifier.fillMaxWidth(),
-                    backgroundColor = RiscOsColors.actionBlue.copy(alpha = if (isEInk) 1f else 0.25f)
-                ) {
-                    TactileLabel(
-                        text = "MANAGE SCREENS ▶",
-                        fontWeight = FontWeight.Bold
-                    )
-                }
+                TactileLabel(
+                    text = if (showMoreOptions) "▲ HIDE ADVANCED OPTIONS" else "▼ SHOW ADVANCED OPTIONS",
+                    fontWeight = FontWeight.Bold
+                )
             }
 
-            // Appearance & Deck Palette Card
-            TactileCard(
-                title = "Appearance & E-Ink Deck Mode",
-                subtitle = "Switch palettes or optimize for Boox E-Ink display",
-                statusBadge = RiscOsColors.currentPalette.name,
-                statusColor = RiscOsColors.actionYellow,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    TactileButton(
-                        onClick = { viewModel.cyclePaletteBack() },
-                        modifier = Modifier.weight(1f)
+            // Advanced / Secondary Functions (Hidden until requested or via menu)
+            if (showMoreOptions) {
+                if (isMultiDisplayDevice) {
+                    TactileCard(
+                        title = "Multi-Display Target",
+                        subtitle = "Manage screens on dual-display devices",
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        TactileLabel(text = "◀ PREV PALETTE", fontWeight = FontWeight.Bold)
-                    }
-                    TactileButton(
-                        onClick = { viewModel.cyclePalette() },
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        TactileLabel(text = "NEXT PALETTE ▶", fontWeight = FontWeight.Bold)
+                        TactileButton(
+                            onClick = onNavigateToMultiScreenManager,
+                            modifier = Modifier.fillMaxWidth(),
+                            backgroundColor = RiscOsColors.actionBlue.copy(alpha = if (isEInk) 1f else 0.25f)
+                        ) {
+                            TactileLabel(
+                                text = "MANAGE MULTI-DISPLAY ▶",
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     }
                 }
-            }
 
-            // Diagnostics Card
-            TactileCard(
-                title = "Diagnostics & System Logs",
-                subtitle = "View system logs and troubleshoot orientation hooks",
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                TactileButton(
-                    onClick = onNavigateToLogs,
-                    modifier = Modifier.fillMaxWidth(),
-                    backgroundColor = RiscOsColors.actionYellow.copy(alpha = if (isEInk) 1f else 0.25f)
+                TactileCard(
+                    title = "Appearance & Deck Palette",
+                    subtitle = "Current Palette: ${RiscOsColors.currentPalette.name}",
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    TactileLabel(
-                        text = "VIEW SYSTEM LOGS ▶",
-                        fontWeight = FontWeight.Bold
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        TactileButton(
+                            onClick = { viewModel.cyclePaletteBack() },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            TactileLabel(text = "◀ PREV", fontWeight = FontWeight.Bold)
+                        }
+                        TactileButton(
+                            onClick = { viewModel.cyclePalette() },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            TactileLabel(text = "NEXT ▶", fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+
+                TactileCard(
+                    title = "Diagnostics & System Logs",
+                    subtitle = "View system logs and troubleshoot hooks",
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    TactileButton(
+                        onClick = onNavigateToLogs,
+                        modifier = Modifier.fillMaxWidth(),
+                        backgroundColor = RiscOsColors.actionYellow.copy(alpha = if (isEInk) 1f else 0.25f)
+                    ) {
+                        TactileLabel(
+                            text = "VIEW DIAGNOSTIC LOGS ▶",
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
             }
         }
